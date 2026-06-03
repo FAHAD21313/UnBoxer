@@ -57,10 +57,11 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
     let mut total_bytes: i64 = 0;
 
     while let Some(dir) = stack.pop() {
-        let entries = afc
-            .list_dir(&dir)
-            .await
-            .map_err(|e| format!("list_dir {dir:?}: {e}"))?;
+        let entries = match afc.list_dir(&dir).await {
+            Ok(e) => e,
+            Err(e) if is_permission_denied(&e) => continue,
+            Err(e) => return Err(format!("list_dir {dir:?}: {e}")),
+        };
 
         for entry in &entries {
             if entry == "." || entry == ".." {
@@ -73,10 +74,11 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
                 format!("{dir}/{entry}")
             };
 
-            let info = afc
-                .get_file_info(&full)
-                .await
-                .map_err(|e| format!("get_file_info {full:?}: {e}"))?;
+            let info = match afc.get_file_info(&full).await {
+                Ok(i) => i,
+                Err(e) if is_permission_denied(&e) => continue,
+                Err(e) => return Err(format!("get_file_info {full:?}: {e}")),
+            };
 
             match info.st_ifmt.as_str() {
                 "S_IFDIR" => {
@@ -85,10 +87,11 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
                     stack.push(full);
                 }
                 "S_IFREG" => {
-                    let mut fh = afc
-                        .open(&full, AfcFopenMode::RdOnly)
-                        .await
-                        .map_err(|e| format!("open {full:?}: {e}"))?;
+                    let mut fh = match afc.open(&full, AfcFopenMode::RdOnly).await {
+                        Ok(f) => f,
+                        Err(e) if is_permission_denied(&e) => continue,
+                        Err(e) => return Err(format!("open {full:?}: {e}")),
+                    };
 
                     zip.start_file(&full, zip::write::SimpleFileOptions::default())
                         .map_err(|e| format!("zip file {full:?}: {e}"))?;
@@ -163,6 +166,11 @@ async fn try_extract(zip_path: &str, output_dir: &str) -> Result<String, String>
     }
 
     Ok(r#"{"status":"success"}"#.to_string())
+}
+
+fn is_permission_denied(e: &impl std::fmt::Display) -> bool {
+    let s = format!("{e}");
+    s.contains("Permission denied") || s.contains("permission_denied")
 }
 
 fn escape_json(s: &str) -> String {
