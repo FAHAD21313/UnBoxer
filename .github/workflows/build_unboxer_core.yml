@@ -1,11 +1,6 @@
 name: Build UnboxerCore XCFramework
 
 on:
-  push:
-    paths:
-      - 'Unboxer/Scripts/UnboxerCore/**'
-      - 'Unboxer/Scripts/build_unboxer_core.sh'
-      - '.github/workflows/build_unboxer_core.yml'
   workflow_dispatch:
 
 jobs:
