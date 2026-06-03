@@ -101,6 +101,7 @@ targets:
     settings:
       HEADER_SEARCH_PATHS:
         - $(inherited)
+        - "Unboxer/Dependencies/libimobiledevice"
         - "Unboxer/Dependencies/libimobiledevice/include"
         - "Unboxer/Dependencies/libimobiledevice/src"
         - "Unboxer/Dependencies/libimobiledevice/common"
