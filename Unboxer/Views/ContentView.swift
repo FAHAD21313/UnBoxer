@@ -39,6 +39,9 @@ struct ContentView: View {
                 DashboardView()
                     .tag(AppTab.dashboard)
                 
+                BackupsView()
+                    .tag(AppTab.backups)
+                
                 SettingsView()
                     .tag(AppTab.settings)
             }

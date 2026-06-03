@@ -33,6 +33,6 @@ struct TopTabBarView: View {
         .clipShape(Capsule())
         .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
         .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
-        .frame(maxWidth: 180)
+        .frame(maxWidth: 300)
     }
 }
