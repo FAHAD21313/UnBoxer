@@ -21,3 +21,8 @@ targets:
       CODE_SIGN_IDENTITY: ""
       ENABLE_USER_SCRIPT_SANDBOXING: NO
       DEVELOPMENT_TEAM: ""
+    dependencies:
+      - framework: Unboxer/Dependencies/RustBridge.xcframework
+        embed: false
+      - framework: Unboxer/Dependencies/OpenSSL.xcframework
+        embed: false
