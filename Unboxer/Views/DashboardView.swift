@@ -96,8 +96,8 @@ struct DashboardView: View {
                     
                     // Native C Minimuxer Test Section
                     Button(action: {
-                        if let hostID = pairingManager.hostID, let systemBUID = pairingManager.systemBUID {
-                            viewModel.establishLockdownConnection(hostID: hostID, systemBUID: systemBUID)
+                        if pairingManager.hostID != nil {
+                            viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path)
                         }
                     }) {
                         HStack(spacing: 10) {

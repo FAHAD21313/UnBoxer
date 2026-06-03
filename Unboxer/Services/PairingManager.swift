@@ -18,7 +18,7 @@ class PairingManager: ObservableObject {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
     
-    private var fileURL: URL {
+    var fileURL: URL {
         documentDirectory.appendingPathComponent(fileName)
     }
     

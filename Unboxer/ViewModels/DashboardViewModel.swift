@@ -10,21 +10,26 @@ class DashboardViewModel: ObservableObject {
     
     /// Triggered from the UI when "Start Test" is tapped.
     /// Initiates the extraction, connection, and session startup sequentially.
-    func establishLockdownConnection(hostID: String, systemBUID: String) {
+    func establishLockdownConnection(pairingFile: String) {
         // Dispatch to Main Thread to update UI securely
         DispatchQueue.main.async {
             self.isTesting = true
-            self.logs = "$ Starting Lockdownd Engine...\n"
-            self.logs += "$ HostID extracted: \(hostID)\n"
-            self.logs += "$ SystemBUID extracted: \(systemBUID)\n"
+            self.logs = "$ Starting Native Lockdown Engine...\n"
             
-            self.appendLog("[DashboardViewModel] Networking engine purged.")
-            self.appendLog("[DashboardViewModel] Ready for Phase 2: SideStore Rust Core Integration via GitHub Actions.")
-            self.appendLog("[DashboardViewModel] The UI state and bindings remain intact.")
-            
-            // Simulating a teardown after a few seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                self.teardown()
+            // Push the heavy lifting to a background thread to prevent UI freezing
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let engineLogs = try LockdownEngine.shared.executeNativeEngine(pairingFile: pairingFile)
+                    self.appendLog(engineLogs)
+                    self.appendLog("$ [ENGINE] Execution Completed Successfully.")
+                } catch {
+                    self.appendLog("$ [ENGINE] FATAL ERROR: \(error.localizedDescription)")
+                }
+                
+                // Teardown the UI state
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.teardown()
+                }
             }
         }
     }
