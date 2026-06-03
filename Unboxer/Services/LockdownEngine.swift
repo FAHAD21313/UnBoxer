@@ -33,15 +33,16 @@ public class LockdownEngine {
         
         // 1. Analyze the pairing file type natively in Swift
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: pairingFile)),
+              let fileContentStr = String(data: data, encoding: .utf8),
               let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
-            throw LockdownEngineError.engineFailure("Invalid Pairing File Format")
+            throw LockdownEngineError.engineFailure("Invalid Pairing File Format or unable to read file contents")
         }
         
         if plist["private_key"] != nil {
             executionLogs += "$ [ENGINE] Detected RPPairing configuration.\n"
-            // Configure the C-binary with the file
+            // Configure the C-binary with the file CONTENTS
             do {
-                try RustIdevice.setRpPairingFile(pairingFile)
+                try RustIdevice.setRpPairingFile(fileContentStr)
                 executionLogs += "$ [ENGINE] C-Library successfully configured with RPPairing.\n"
             } catch {
                 throw LockdownEngineError.engineFailure("Failed to set RPPairing in C-Library: \(error.localizedDescription)")
