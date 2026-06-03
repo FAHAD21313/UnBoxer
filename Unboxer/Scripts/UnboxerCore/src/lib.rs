@@ -20,6 +20,9 @@ extern "C" {
         length: *mut u32,
         prettify: c_int,
     ) -> c_int;
+    fn plist_new_dict() -> *mut c_void;
+    fn plist_new_string(val: *const c_char) -> *mut c_void;
+    fn plist_dict_set_item(node: *mut c_void, key: *const c_char, item: *mut c_void);
     fn plist_free(plist: *mut c_void);
     fn plist_mem_free(ptr: *mut c_void);
 }
@@ -47,11 +50,21 @@ pub unsafe extern "C" fn rust_bridge_idevice_fetch_all_apps() -> *mut c_char {
         return std::ptr::null_mut();
     }
 
+    let opts = plist_new_dict();
+    let has_opts = !opts.is_null();
+    if has_opts {
+        let app_type_key = CString::new("ApplicationType").unwrap();
+        let app_type_val = CString::new("Any").unwrap();
+        plist_dict_set_item(opts, app_type_key.as_ptr(), plist_new_string(app_type_val.as_ptr()));
+    }
+
     let mut result: *mut c_void = std::ptr::null_mut();
-    if instproxy_browse(client, std::ptr::null_mut(), &mut result) != 0 || result.is_null() {
+    if instproxy_browse(client, if has_opts { opts } else { std::ptr::null_mut() }, &mut result) != 0 || result.is_null() {
+        if has_opts { plist_free(opts); }
         idevice_free(device);
         return std::ptr::null_mut();
     }
+    if has_opts { plist_free(opts); }
 
     let mut json: *mut c_char = std::ptr::null_mut();
     let mut length: u32 = 0;

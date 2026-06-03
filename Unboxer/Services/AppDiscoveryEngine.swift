@@ -28,8 +28,16 @@ public class AppDiscoveryEngine {
             throw NSError(domain: "AppDiscoveryEngine", code: -3, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON format from Rust Core."])
         }
 
+        if array.isEmpty {
+            let preview = String(data: jsonData, encoding: .utf8)?.prefix(500) ?? "no data"
+            print("[DISCOVERY DEBUG] instproxy returned empty array. Raw JSON preview: \(preview)")
+        }
+
         let apps: [AppInfo] = array.compactMap { dict in
-            guard let bundleID = dict["CFBundleIdentifier"] as? String else { return nil }
+            guard let bundleID = dict["CFBundleIdentifier"] as? String else {
+                if !array.isEmpty { print("[DISCOVERY DEBUG] Missing CFBundleIdentifier in entry, keys: \(dict.keys.joined(separator: ", "))") }
+                return nil
+            }
             let name = (dict["CFBundleDisplayName"] as? String)
                 ?? (dict["CFBundleName"] as? String)
                 ?? bundleID
