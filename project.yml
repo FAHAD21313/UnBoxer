@@ -77,6 +77,8 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Unboxer
+        excludes:
+          - Dependencies
     info:
       path: Unboxer/Resources/Info.plist
       properties:
