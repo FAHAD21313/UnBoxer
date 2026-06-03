@@ -1,7 +1,76 @@
 name: Unboxer
 options:
   bundleIdPrefix: com.unboxer
+
 targets:
+  libplist:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Unboxer/Dependencies/libplist/src
+        compilerFlags: ["-w"]
+      - path: Unboxer/Dependencies/libplist/libcnary
+        compilerFlags: ["-w"]
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(inherited)
+        - "Unboxer/Dependencies/libplist/include"
+        - "Unboxer/Dependencies/libplist/libcnary/include"
+
+  libusbmuxd:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Unboxer/Dependencies/libusbmuxd/src
+        compilerFlags: ["-w"]
+    dependencies:
+      - target: libplist
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(inherited)
+        - "Unboxer/Dependencies/libusbmuxd/include"
+        - "Unboxer/Dependencies/libplist/include"
+
+  libimobiledevice-glue:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Unboxer/Dependencies/libimobiledevice-glue/src
+        compilerFlags: ["-w"]
+    dependencies:
+      - target: libplist
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(inherited)
+        - "Unboxer/Dependencies/libimobiledevice-glue/include"
+        - "Unboxer/Dependencies/libplist/include"
+
+  libimobiledevice:
+    type: library.static
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Unboxer/Dependencies/libimobiledevice/src
+        compilerFlags: ["-w"]
+    dependencies:
+      - target: libplist
+      - target: libusbmuxd
+      - target: libimobiledevice-glue
+      - framework: Unboxer/Dependencies/OpenSSL.xcframework
+        embed: false
+    settings:
+      HEADER_SEARCH_PATHS:
+        - $(inherited)
+        - "Unboxer/Dependencies/libimobiledevice/include"
+        - "Unboxer/Dependencies/libimobiledevice-glue/include"
+        - "Unboxer/Dependencies/libusbmuxd/include"
+        - "Unboxer/Dependencies/libplist/include"
+      GCC_PREPROCESSOR_DEFINITIONS: 
+        - "HAVE_OPENSSL=1"
+
   Unboxer:
     type: application
     platform: iOS
@@ -21,7 +90,12 @@ targets:
       CODE_SIGN_IDENTITY: ""
       ENABLE_USER_SCRIPT_SANDBOXING: NO
       DEVELOPMENT_TEAM: ""
+      OTHER_LDFLAGS: ["-ObjC"]
     dependencies:
+      - target: libimobiledevice
+      - target: libimobiledevice-glue
+      - target: libplist
+      - target: libusbmuxd
       - framework: Unboxer/Dependencies/RustBridge.xcframework
         embed: false
       - framework: Unboxer/Dependencies/OpenSSL.xcframework
