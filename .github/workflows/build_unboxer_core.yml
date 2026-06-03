@@ -29,5 +29,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Unboxer/Dependencies/RustBridge.xcframework
-          git commit -m "chore: Rebuild RustBridge.xcframework from source" || echo "No changes to commit"
+          git add Unboxer/Dependencies/OpenSSL.xcframework
+          git commit -m "chore: Rebuild and thin XCFrameworks from source" || echo "No changes to commit"
           git push
