@@ -3,8 +3,8 @@ name: Build Custom Rust Core
 on:
   push:
     paths:
-      - 'Scripts/build_rust_bridge.sh'
-      - 'Scripts/minimuxer_ffi.patch'
+      - 'Unboxer/Scripts/build_rust_bridge.sh'
+      - 'Unboxer/Scripts/minimuxer_ffi.patch'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
@@ -20,16 +20,17 @@ jobs:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
 
       - name: Make Build Script Executable
-        run: chmod +x Scripts/build_rust_bridge.sh
+        run: chmod +x Unboxer/Scripts/build_rust_bridge.sh
 
       - name: Run Custom Rust Core Factory
         run: |
-          cd Scripts
+          cd Unboxer/Scripts
           ./build_rust_bridge.sh
 
       - name: Upload RustBridge.xcframework Artifact
         uses: actions/upload-artifact@v4
         with:
           name: RustBridge.xcframework
-          path: Scripts/minimuxer/RustBridge.xcframework
+          path: Unboxer/Scripts/minimuxer/RustBridge.xcframework
           retention-days: 7
+
