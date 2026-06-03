@@ -82,6 +82,8 @@ targets:
     sources:
       - path: Unboxer/Dependencies/libimobiledevice/src
         compilerFlags: ["-w"]
+      - path: Unboxer/Dependencies/libimobiledevice/common
+        compilerFlags: ["-w"]
     dependencies:
       - target: libplist
       - target: libusbmuxd
@@ -93,6 +95,7 @@ targets:
         - $(inherited)
         - "Unboxer/Dependencies/libimobiledevice/include"
         - "Unboxer/Dependencies/libimobiledevice/src"
+        - "Unboxer/Dependencies/libimobiledevice/common"
         - "Unboxer/Dependencies/libimobiledevice-glue/include"
         - "Unboxer/Dependencies/libusbmuxd/include"
         - "Unboxer/Dependencies/libplist/include"
