@@ -1,0 +1,38 @@
+name: Build UnboxerCore XCFramework
+
+on:
+  push:
+    paths:
+      - 'Unboxer/Scripts/UnboxerCore/**'
+      - 'Unboxer/Scripts/build_unboxer_core.sh'
+      - '.github/workflows/build_unboxer_core.yml'
+  workflow_dispatch:
+
+jobs:
+  build-unboxer-core:
+    runs-on: macos-13
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Make script executable
+        run: chmod +x Unboxer/Scripts/build_unboxer_core.sh
+
+      - name: Build UnboxerCore XCFramework
+        run: ./Unboxer/Scripts/build_unboxer_core.sh
+
+      - name: Commit and Push Sniper Injection
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Unboxer/Dependencies/RustBridge.xcframework
+          git commit -m "chore: Inject UnboxerCore mock FFI into RustBridge" || echo "No changes to commit"
+          git push

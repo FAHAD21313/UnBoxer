@@ -14,6 +14,9 @@ internal struct RustIdeviceFfiError {
 	let message: UnsafePointer<Int8>?
 }
 
+@_silgen_name("unboxer_core_free_string")
+internal func _unboxer_core_free_string(_ ptr: UnsafeMutablePointer<Int8>?)
+
 @_silgen_name("idevice_error_free")
 internal func _idevice_error_free(_ err: UnsafeMutablePointer<RustIdeviceFfiError>?)
 
@@ -151,7 +154,7 @@ public class RustIdevice {
         guard let pointer = _rust_bridge_idevice_fetch_all_apps() else {
             return nil
         }
-        defer { _rust_bridge_idevice_free_string(pointer) }
+        defer { _unboxer_core_free_string(pointer) }
         return String(cString: pointer)
     }
 
