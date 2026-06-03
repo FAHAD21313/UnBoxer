@@ -19,6 +19,11 @@ jobs:
         with:
           targets: aarch64-apple-ios, aarch64-apple-ios-sim
 
+      - name: Install dependencies
+        run: |
+          cargo install --force --locked bindgen-cli
+          brew install cmake
+
       - name: Make Build Script Executable
         run: chmod +x Unboxer/Scripts/build_rust_bridge.sh
 
