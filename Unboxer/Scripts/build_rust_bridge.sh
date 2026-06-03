@@ -24,11 +24,15 @@ echo "➡️ Building iOS Simulator ARM64 target..."
 rustup target add aarch64-apple-ios-sim
 cargo build --target aarch64-apple-ios-sim --release
 
+echo "➡️ Preparing libraries for XCFramework..."
+cp target/aarch64-apple-ios/release/libminimuxer.a target/aarch64-apple-ios/release/librust_bridge.a
+cp target/aarch64-apple-ios-sim/release/libminimuxer.a target/aarch64-apple-ios-sim/release/librust_bridge.a
+
 echo "➡️ Assembling RustBridge.xcframework..."
 rm -rf RustBridge.xcframework
 xcodebuild -create-xcframework \
-    -library target/aarch64-apple-ios/release/libminimuxer_ios.a \
-    -library target/aarch64-apple-ios-sim/release/libminimuxer_ios.a \
+    -library target/aarch64-apple-ios/release/librust_bridge.a \
+    -library target/aarch64-apple-ios-sim/release/librust_bridge.a \
     -output RustBridge.xcframework
 
 echo "✅ Custom RustBridge.xcframework generated successfully!"
