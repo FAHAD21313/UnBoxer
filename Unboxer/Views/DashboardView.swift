@@ -96,8 +96,8 @@ struct DashboardView: View {
                     
                     // Native C Minimuxer Test Section
                     Button(action: {
-                        if pairingManager.hostID != nil {
-                            viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path)
+                        if let hostID = pairingManager.hostID {
+                            viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path, udid: hostID)
                         }
                     }) {
                         HStack(spacing: 10) {
@@ -106,7 +106,7 @@ struct DashboardView: View {
                             } else {
                                 Image(systemName: "network")
                             }
-                            Text("Start Engine Test")
+                            Text(viewModel.showAppList ? "Refresh Apps" : "Start Engine Test")
                                 .font(.system(size: 15, weight: .bold))
                         }
                         .foregroundColor(.white)
@@ -125,35 +125,105 @@ struct DashboardView: View {
                                     .font(.system(size: 12, weight: .bold))
                                     .foregroundColor(.secondary)
                                 Spacer()
+                                
                                 Button(action: {
-                                    // UXPasteboard implementation for macOS/iOS
+                                    withAnimation(.spring()) {
+                                        viewModel.isLogsFolded.toggle()
+                                    }
+                                }) {
+                                    Image(systemName: viewModel.isLogsFolded ? "chevron.down" : "chevron.up")
+                                        .foregroundColor(.white)
+                                        .font(.system(size: 12, weight: .bold))
+                                        .padding(8)
+                                        .background(Color.white.opacity(0.1))
+                                        .clipShape(Circle())
+                                }
+                                
+                                Button(action: {
                                     #if os(iOS)
                                     UIPasteboard.general.string = viewModel.logs
                                     #endif
                                 }) {
                                     Image(systemName: "doc.on.doc")
                                         .foregroundColor(.white)
-                                        .font(.system(size: 14))
+                                        .font(.system(size: 12))
                                         .padding(8)
                                         .background(Color.white.opacity(0.1))
                                         .clipShape(Circle())
                                 }
                             }
                             
-                            ScrollView {
-                                Text(viewModel.logs)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundColor(.green)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            if !viewModel.isLogsFolded {
+                                ScrollView {
+                                    Text(viewModel.logs)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.green)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .frame(height: 120)
+                                .padding(10)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(10)
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                             }
-                            .frame(height: 120)
-                            .padding(10)
-                            .background(Color.black.opacity(0.4))
-                            .cornerRadius(10)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.1), lineWidth: 1))
                         }
                         .padding(.top, 10)
                         .transition(.opacity)
+                    }
+                    
+                    // App List Section
+                    if viewModel.showAppList {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Installed Apps (\(viewModel.apps.count))")
+                                .font(.system(size: 18, weight: .bold))
+                                .padding(.top, 10)
+                            
+                            ScrollView {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(viewModel.apps) { app in
+                                        HStack(spacing: 16) {
+                                            // App Icon Placeholder
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(Color.white.opacity(0.1))
+                                                .frame(width: 50, height: 50)
+                                                .overlay(
+                                                    Image(systemName: "app.fill")
+                                                        .foregroundColor(.white.opacity(0.5))
+                                                        .font(.system(size: 24))
+                                                )
+                                            
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(app.name)
+                                                    .font(.system(size: 16, weight: .bold))
+                                                    .foregroundColor(.primary)
+                                                Text(app.bundleID)
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            Text("v\(app.version)")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.white.opacity(0.1))
+                                                .clipShape(Capsule())
+                                        }
+                                        .padding()
+                                        .background(Color.black.opacity(0.2))
+                                        .cornerRadius(16)
+                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            .frame(maxHeight: 300)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
                 .padding(30)
@@ -162,6 +232,8 @@ struct DashboardView: View {
                 .cornerRadius(24)
                 .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
                 .padding(.horizontal)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.showAppList)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.isLogsFolded)
             }
             
             Spacer()

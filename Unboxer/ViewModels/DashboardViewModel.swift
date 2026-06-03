@@ -7,13 +7,18 @@ import Combine
 class DashboardViewModel: ObservableObject {
     @Published var logs: String = ""
     @Published var isTesting: Bool = false
+    @Published var apps: [AppInfo] = []
+    @Published var showAppList: Bool = false
+    @Published var isLogsFolded: Bool = false
     
     /// Triggered from the UI when "Start Test" is tapped.
     /// Initiates the extraction, connection, and session startup sequentially.
-    func establishLockdownConnection(pairingFile: String) {
+    func establishLockdownConnection(pairingFile: String, udid: String?) {
         // Dispatch to Main Thread to update UI securely
         DispatchQueue.main.async {
             self.isTesting = true
+            self.showAppList = false
+            self.isLogsFolded = false
             self.logs = "$ Starting Native Lockdown Engine...\n"
             
             // Push the heavy lifting to a background thread to prevent UI freezing
@@ -21,6 +26,19 @@ class DashboardViewModel: ObservableObject {
                 do {
                     let engineLogs = try LockdownEngine.shared.executeNativeEngine(pairingFile: pairingFile)
                     self.appendLog(engineLogs)
+                    
+                    if let udid = udid {
+                        self.appendLog("$ [DISCOVERY] Initiating App Discovery Engine...")
+                        let fetchedApps = try AppDiscoveryEngine.shared.fetchAllApps(udid: udid)
+                        self.appendLog("$ [DISCOVERY] Found \(fetchedApps.count) User Apps!")
+                        
+                        DispatchQueue.main.async {
+                            self.apps = fetchedApps
+                            self.showAppList = true
+                            self.isLogsFolded = true // Fold logs on success to show apps
+                        }
+                    }
+                    
                     self.appendLog("$ [ENGINE] Execution Completed Successfully.")
                 } catch {
                     self.appendLog("$ [ENGINE] FATAL ERROR: \(error.localizedDescription)")
@@ -45,7 +63,7 @@ class DashboardViewModel: ObservableObject {
     private func teardown() {
         DispatchQueue.main.async { [weak self] in
             self?.isTesting = false
-            self?.logs += "\n$ Engine gracefully stopped. Ready for next test.\n"
+            self?.logs += "\n$ Engine gracefully stopped. Ready for next action.\n"
         }
     }
 }
