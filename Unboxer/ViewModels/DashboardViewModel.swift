@@ -10,6 +10,11 @@ class DashboardViewModel: ObservableObject {
     @Published var apps: [AppInfo] = []
     @Published var showAppList: Bool = false
     @Published var isLogsFolded: Bool = false
+    @Published var isBackingUp: Bool = false
+    @Published var backingUpBundleID: String?
+    @Published var backupError: String?
+    @Published var backupSuccessMessage: String?
+    @Published var showBackupToast: Bool = false
     
     /// Triggered from the UI when "Start Test" is tapped.
     /// Initiates the extraction, connection, and session startup sequentially.
@@ -64,6 +69,37 @@ class DashboardViewModel: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.isTesting = false
             self?.logs += "\n$ Engine gracefully stopped. Ready for next action.\n"
+        }
+    }
+
+    func performBackup(bundleID: String, appName: String, version: String) {
+        guard !isBackingUp else { return }
+        isBackingUp = true
+        backingUpBundleID = bundleID
+        backupError = nil
+        backupSuccessMessage = nil
+
+        Task {
+            do {
+                _ = try await BackupEngine.shared.backupApp(
+                    bundleID: bundleID,
+                    appName: appName,
+                    version: version
+                )
+                await MainActor.run {
+                    self.isBackingUp = false
+                    self.backingUpBundleID = nil
+                    self.backupSuccessMessage = "Backup of \(appName) completed."
+                    self.showBackupToast = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isBackingUp = false
+                    self.backingUpBundleID = nil
+                    self.backupError = error.localizedDescription
+                    self.showBackupToast = true
+                }
+            }
         }
     }
 }
