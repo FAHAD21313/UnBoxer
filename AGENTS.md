@@ -9,13 +9,13 @@ No code signing (`CODE_SIGNING_ALLOWED=NO`, empty identity/team).
 
 ## Dependencies (all vendored, no SPM/CocoaPods)
 - 4 C static libs: `libplist`, `libusbmuxd`, `libimobiledevice-glue`, `libimobiledevice` (under `Unboxer/Dependencies/`)
-- `OpenSSL.xcframework`, `RustBridge.xcframework`
+- `OpenSSL.xcframework` (thinned to ios-arm64 only), `RustBridge.xcframework` (ios-arm64 only)
 
 ## Rust FFI bridge
-- Rust crate at `Unboxer/Scripts/RustBridge/` — produces `librust_bridge.a` (staticlib), wrapped into `RustBridge.xcframework`
-- `Unboxer/Scripts/build_rust_bridge.sh` runs `make xcframework` (which builds for `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `aarch64-apple-darwin`) then copies to `Unboxer/Dependencies/`
+- Rust crate at `Unboxer/Scripts/RustBridge/` — produces `librust_bridge.a` (staticlib), wrapped into single-slice `RustBridge.xcframework`
+- `Unboxer/Scripts/build_rust_bridge.sh` runs `make xcframework` (builds for `aarch64-apple-ios` + `strip -S`), then copies to `Unboxer/Dependencies/` and thins `OpenSSL.xcframework`
 - Swift FFI bindings: `MinimuxerBridge.swift` (low-level), `MinimuxerBridgeIdevice.swift` (high-level yeet/install/remove/apps/debug/profile/DDI)
-- Prerequisites for Rust build: `rustup target add aarch64-apple-ios aarch64-apple-ios-sim`
+- Prerequisites for Rust build: `rustup target add aarch64-apple-ios`
 
 ## Entrypoint & architecture
 - `UnBoxerApp.swift` → `ContentView` (2 tabs: Dashboard, Settings)
@@ -45,11 +45,11 @@ xcodebuild clean build \
 | Workflow | Trigger | Description |
 |---|---|---|
 | `build.yml` | `workflow_dispatch` (manual, requires version input) | xcodegen → xcodebuild → IPA → GitHub Release |
-| `build_unboxer_core.yml` | `workflow_dispatch` (manual only) | Rust build → `RustBridge.xcframework` from source → commit+push |
+| `build_unboxer_core.yml` | `workflow_dispatch` (manual only) | Rust build → `RustBridge.xcframework` (ios-arm64) + thin `OpenSSL.xcframework` → commit+push |
 
 ## Key gotchas
 - **macOS + Xcode required** for any build
-- Rust rebuild *must* use `libtool -static` to merge — cannot just replace the `.a`
+- Rust rebuild builds ios-arm64 only — no simulator/macOS slices; `strip -S` removes debug symbols
 - Pairing file (`.plist`) must be imported via Dashboard before any engine operation works
 - Info.plist is Nyxian-format (`NX*` keys); standard Xcode plist keys are inside `NXBundleInfo` dict
 - Entitlements are Nyxian-specific (`com.nyxian.pe.*`) — only `get_task_allowed` is true

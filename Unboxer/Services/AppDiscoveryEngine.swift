@@ -29,13 +29,11 @@ public class AppDiscoveryEngine {
         }
 
         if array.isEmpty {
-            let preview = String(data: jsonData, encoding: .utf8)?.prefix(500) ?? "no data"
-            print("[DISCOVERY DEBUG] instproxy returned empty array. Raw JSON preview: \(preview)")
+            throw NSError(domain: "AppDiscoveryEngine", code: -4, userInfo: [NSLocalizedDescriptionKey: "instproxy returned empty list. No user apps found on device."])
         }
 
         let apps: [AppInfo] = array.compactMap { dict in
             guard let bundleID = dict["CFBundleIdentifier"] as? String else {
-                if !array.isEmpty { print("[DISCOVERY DEBUG] Missing CFBundleIdentifier in entry, keys: \(dict.keys.joined(separator: ", "))") }
                 return nil
             }
             let name = (dict["CFBundleDisplayName"] as? String)
@@ -45,7 +43,7 @@ public class AppDiscoveryEngine {
             let path = (dict["BundlePath"] as? String) ?? ""
             return AppInfo(name: name, bundleID: bundleID, version: version, path: path)
         }
-        .filter { ($0.bundleID as NSString).length > 0 }
+        .filter { !$0.bundleID.isEmpty }
 
         return apps.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
