@@ -70,21 +70,31 @@ public class AppDiscoveryEngine {
     
     public func fetchAllApps(udid: String) throws -> [AppInfo] {
         var device: UnsafeMutableRawPointer? = nil
-        let deviceErr = _idevice_new(&device, udid)
+        
+        let deviceErr = udid.withCString { udidPtr in
+            _idevice_new(&device, udidPtr)
+        }
+        
         guard deviceErr == 0, let devicePtr = device else {
             throw NSError(domain: "AppDiscoveryEngine", code: Int(deviceErr), userInfo: [NSLocalizedDescriptionKey: "Failed to connect to device. Ensure pairing file is valid and network is reachable."])
         }
         defer { _idevice_free(devicePtr) }
         
         var lockdown: UnsafeMutableRawPointer? = nil
-        let lockErr = _lockdownd_client_new_with_handshake(devicePtr, &lockdown, "Unboxer-Discovery")
+        let lockErr = "Unboxer-Discovery".withCString { labelPtr in
+            _lockdownd_client_new_with_handshake(devicePtr, &lockdown, labelPtr)
+        }
+        
         guard lockErr == 0, let lockdownPtr = lockdown else {
             throw NSError(domain: "AppDiscoveryEngine", code: Int(lockErr), userInfo: [NSLocalizedDescriptionKey: "Failed to establish lockdownd handshake."])
         }
         defer { _lockdownd_client_free(lockdownPtr) }
         
         var service: UnsafeMutableRawPointer? = nil
-        let srvErr = _lockdownd_start_service(lockdownPtr, "com.apple.mobile.installation_proxy", &service)
+        let srvErr = "com.apple.mobile.installation_proxy".withCString { srvPtr in
+            _lockdownd_start_service(lockdownPtr, srvPtr, &service)
+        }
+        
         guard srvErr == 0, let servicePtr = service else {
             throw NSError(domain: "AppDiscoveryEngine", code: Int(srvErr), userInfo: [NSLocalizedDescriptionKey: "Failed to start installation_proxy service."])
         }
@@ -101,24 +111,25 @@ public class AppDiscoveryEngine {
         let clientOptions = _plist_new_dict()
         defer { _plist_free(clientOptions) }
         
-        let clientOptsDict = _plist_new_dict()
-        let typeStr = _plist_new_string("User")
-        _plist_dict_set_item(clientOptions, "ApplicationType", typeStr)
+        "User".withCString { userPtr in
+            let typeStr = _plist_new_string(userPtr)
+            "ApplicationType".withCString { keyPtr in
+                _plist_dict_set_item(clientOptions, keyPtr, typeStr)
+            }
+        }
         
         let returnAttrs = _plist_new_array()
-        let attr1 = _plist_new_string("CFBundleDisplayName")
-        let attr2 = _plist_new_string("CFBundleIdentifier")
-        let attr3 = _plist_new_string("CFBundleShortVersionString")
-        let attr4 = _plist_new_string("Path")
-        let attr5 = _plist_new_string("Container")
+        let attrs = ["CFBundleDisplayName", "CFBundleIdentifier", "CFBundleShortVersionString", "Path", "Container"]
+        for attr in attrs {
+            attr.withCString { attrPtr in
+                let attrNode = _plist_new_string(attrPtr)
+                _plist_array_append_item(returnAttrs, attrNode)
+            }
+        }
         
-        _plist_array_append_item(returnAttrs, attr1)
-        _plist_array_append_item(returnAttrs, attr2)
-        _plist_array_append_item(returnAttrs, attr3)
-        _plist_array_append_item(returnAttrs, attr4)
-        _plist_array_append_item(returnAttrs, attr5)
-        
-        _plist_dict_set_item(clientOptions, "ReturnAttributes", returnAttrs)
+        "ReturnAttributes".withCString { keyPtr in
+            _plist_dict_set_item(clientOptions, keyPtr, returnAttrs)
+        }
         
         var resultPlist: UnsafeMutableRawPointer? = nil
         let browseErr = _instproxy_browse(instproxyPtr, clientOptions, &resultPlist)
