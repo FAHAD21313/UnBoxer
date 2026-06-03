@@ -38,11 +38,13 @@ targets:
         compilerFlags: ["-w"]
     dependencies:
       - target: libplist
+      - target: libimobiledevice-glue
     settings:
       HEADER_SEARCH_PATHS:
         - $(inherited)
         - "Unboxer/Dependencies/libusbmuxd/include"
         - "Unboxer/Dependencies/libplist/include"
+        - "Unboxer/Dependencies/libimobiledevice-glue/include"
       GCC_PREPROCESSOR_DEFINITIONS:
         - "HAVE_OPENSSL=1"
         - "HAVE_STPNCPY=1"
