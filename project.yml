@@ -153,6 +153,6 @@ targets:
       - target: libplist
       - target: libusbmuxd
       - framework: Unboxer/Dependencies/RustBridge.xcframework
-        embed: false
+        embed: true
       - framework: Unboxer/Dependencies/OpenSSL.xcframework
-        embed: false
+        embed: true
