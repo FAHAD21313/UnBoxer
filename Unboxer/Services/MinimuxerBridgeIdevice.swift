@@ -14,9 +14,6 @@ internal struct RustIdeviceFfiError {
 	let message: UnsafePointer<Int8>?
 }
 
-@_silgen_name("unboxer_core_free_string")
-internal func _unboxer_core_free_string(_ ptr: UnsafeMutablePointer<Int8>?)
-
 @_silgen_name("idevice_error_free")
 internal func _idevice_error_free(_ err: UnsafeMutablePointer<RustIdeviceFfiError>?)
 
@@ -89,11 +86,6 @@ internal func _rust_bridge_idevice_mount_personalized_ddi(
 @_silgen_name("rust_bridge_idevice_fetch_all_apps")
 internal func _rust_bridge_idevice_fetch_all_apps() -> UnsafeMutablePointer<Int8>?
 
-@_silgen_name("rust_bridge_idevice_house_arrest_pull")
-internal func _rust_bridge_idevice_house_arrest_pull(
-    _ bundleId: UnsafePointer<Int8>?,
-    _ destPath: UnsafePointer<Int8>?
-) -> Int32
 
 
 // MARK: - Error Handling
@@ -154,23 +146,11 @@ public class RustIdevice {
         guard let pointer = _rust_bridge_idevice_fetch_all_apps() else {
             return nil
         }
-        defer { _unboxer_core_free_string(pointer) }
+        defer { _rust_bridge_idevice_free_string(pointer) }
         return String(cString: pointer)
     }
 
-    public static func houseArrestPull(bundleId: String, destPath: String) throws {
-        let result = bundleId.withCString { bId in
-            destPath.withCString { dPath in
-                _rust_bridge_idevice_house_arrest_pull(bId, dPath)
-            }
-        }
-        if result != 0 {
-            throw NSError(domain: "minimuxer", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Failed to pull container via house_arrest"])
-        }
-    }
-
-
-	public static func installIpa(bundleId: String) throws {
+    public static func installIpa(bundleId: String) throws {
 		try rustIdeviceThrowIfNeeded(_rust_bridge_idevice_install_ipa(bundleId))
 	}
 
