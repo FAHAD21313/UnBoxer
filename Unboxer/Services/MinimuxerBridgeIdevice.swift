@@ -83,6 +83,15 @@ internal func _rust_bridge_idevice_mount_personalized_ddi(
     _ manifest_ptr: UnsafePointer<UInt8>?, _ manifest_len: UInt32,
 ) -> Int32
 
+@_silgen_name("rust_bridge_idevice_fetch_all_apps")
+internal func _rust_bridge_idevice_fetch_all_apps() -> UnsafeMutablePointer<Int8>?
+
+@_silgen_name("rust_bridge_idevice_house_arrest_pull")
+internal func _rust_bridge_idevice_house_arrest_pull(
+    _ bundleId: UnsafePointer<Int8>?,
+    _ destPath: UnsafePointer<Int8>?
+) -> Int32
+
 
 // MARK: - Error Handling
 
@@ -137,6 +146,26 @@ public class RustIdevice {
 
 		try rustIdeviceThrowIfNeeded(error)
 	}
+
+    public static func fetchAllApps() -> String? {
+        guard let pointer = _rust_bridge_idevice_fetch_all_apps() else {
+            return nil
+        }
+        defer { _rust_bridge_idevice_free_string(pointer) }
+        return String(cString: pointer)
+    }
+
+    public static func houseArrestPull(bundleId: String, destPath: String) throws {
+        let result = bundleId.withCString { bId in
+            destPath.withCString { dPath in
+                _rust_bridge_idevice_house_arrest_pull(bId, dPath)
+            }
+        }
+        if result != 0 {
+            throw NSError(domain: "minimuxer", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Failed to pull container via house_arrest"])
+        }
+    }
+
 
 	public static func installIpa(bundleId: String) throws {
 		try rustIdeviceThrowIfNeeded(_rust_bridge_idevice_install_ipa(bundleId))
