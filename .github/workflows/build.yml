@@ -30,6 +30,7 @@ jobs:
           
       - name: Build Unsigned App
         run: |
+          set +e
           xcodebuild clean build \
             -project Unboxer.xcodeproj \
             -scheme Unboxer \
@@ -39,7 +40,17 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             EXPANDED_CODE_SIGN_IDENTITY="" \
-            CONFIGURATION_BUILD_DIR="${PWD}/build"
+            CONFIGURATION_BUILD_DIR="${PWD}/build" > build.log 2>&1
+          
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::error::Build Failed! Extracting compiler errors..."
+            grep -i -A 3 -B 3 "error:" build.log
+            echo "=== FULL LOG TAIL ==="
+            tail -n 100 build.log
+            exit $EXIT_CODE
+          fi
+          set -e
             
       - name: Package IPA
         run: |
