@@ -86,6 +86,18 @@ internal func _rust_bridge_idevice_mount_personalized_ddi(
 @_silgen_name("rust_bridge_idevice_fetch_all_apps")
 internal func _rust_bridge_idevice_fetch_all_apps() -> UnsafeMutablePointer<Int8>?
 
+@_silgen_name("rust_bridge_idevice_backup_app")
+internal func _rust_bridge_idevice_backup_app(
+    _ bundleId: UnsafePointer<Int8>?,
+    _ outputDir: UnsafePointer<Int8>?
+) -> UnsafeMutablePointer<Int8>?
+
+@_silgen_name("rust_bridge_extract_zip")
+internal func _rust_bridge_extract_zip(
+    _ zipPath: UnsafePointer<Int8>?,
+    _ outputDir: UnsafePointer<Int8>?
+) -> UnsafeMutablePointer<Int8>?
+
 
 
 // MARK: - Error Handling
@@ -148,6 +160,43 @@ public class RustIdevice {
         }
         defer { _rust_bridge_idevice_free_string(pointer) }
         return String(cString: pointer)
+    }
+
+    public static func backupApp(bundleId: String, outputDir: String) throws -> String {
+        guard let ptr = _rust_bridge_idevice_backup_app(bundleId, outputDir) else {
+            throw NSError(domain: "RustIdevice", code: -1, userInfo: [NSLocalizedDescriptionKey: "rust_bridge_idevice_backup_app returned null"])
+        }
+        defer { _rust_bridge_idevice_free_string(ptr) }
+        let json = String(cString: ptr)
+        guard let data = json.data(using: .utf8),
+              let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = dict["status"] as? String
+        else {
+            throw NSError(domain: "RustIdevice", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse backup response: \(json)"])
+        }
+        if status == "error" {
+            let msg = dict["error"] as? String ?? "Unknown error"
+            throw NSError(domain: "RustIdevice", code: -3, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+        return json
+    }
+
+    public static func extractZip(zipPath: String, outputDir: String) throws {
+        guard let ptr = _rust_bridge_extract_zip(zipPath, outputDir) else {
+            throw NSError(domain: "RustIdevice", code: -4, userInfo: [NSLocalizedDescriptionKey: "rust_bridge_extract_zip returned null"])
+        }
+        defer { _rust_bridge_idevice_free_string(ptr) }
+        let json = String(cString: ptr)
+        guard let data = json.data(using: .utf8),
+              let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = dict["status"] as? String
+        else {
+            throw NSError(domain: "RustIdevice", code: -5, userInfo: [NSLocalizedDescriptionKey: "Failed to parse extract response: \(json)"])
+        }
+        if status == "error" {
+            let msg = dict["error"] as? String ?? "Unknown error"
+            throw NSError(domain: "RustIdevice", code: -6, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
     }
 
     public static func installIpa(bundleId: String) throws {

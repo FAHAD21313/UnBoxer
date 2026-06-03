@@ -20,8 +20,16 @@ struct BackupsView: View {
 
             Spacer()
 
-            if viewModel.selectedBackup != nil {
-                fileBrowserView
+            if viewModel.isBackingUp || viewModel.backupSuccess != nil || viewModel.backupError != nil {
+                backupStatusView
+            } else if viewModel.selectedBackup != nil {
+                if viewModel.isExtracting {
+                    extractingView
+                } else if let err = viewModel.extractError {
+                    extractionErrorView(err)
+                } else {
+                    fileBrowserView
+                }
             } else if viewModel.backups.isEmpty {
                 emptyStateView
             } else {
@@ -43,6 +51,95 @@ struct BackupsView: View {
                 Text("This will permanently delete the backup of \(entry.appName) including all files.")
             }
         }
+    }
+
+    private var backupStatusView: some View {
+        VStack(spacing: 16) {
+            if viewModel.isBackingUp {
+                ProgressView()
+                    .scaleEffect(1.2)
+                Text("Backing up...")
+                    .font(.system(size: 16, weight: .bold))
+                Text("Please keep the device nearby.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            } else if let msg = viewModel.backupSuccess {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.green)
+                Text(msg)
+                    .font(.system(size: 15, weight: .medium))
+                    .multilineTextAlignment(.center)
+                Button("Done") {
+                    viewModel.backupSuccess = nil
+                }
+                .buttonStyle(.borderedProminent)
+            } else if let msg = viewModel.backupError {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundColor(.red)
+                Text(msg)
+                    .font(.system(size: 14))
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                Button("Dismiss") {
+                    viewModel.backupError = nil
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal)
+    }
+
+    private var extractingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.2)
+            Text("Extracting backup...")
+                .font(.system(size: 16, weight: .bold))
+            Text("Preparing files for browsing.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal)
+    }
+
+    private func extractionErrorView(_ msg: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundColor(.yellow)
+
+            Text("Extraction Failed")
+                .font(.system(size: 18, weight: .bold))
+
+            Text(msg)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button("Go Back") {
+                viewModel.clearExtraction()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal)
     }
 
     private var emptyStateView: some View {

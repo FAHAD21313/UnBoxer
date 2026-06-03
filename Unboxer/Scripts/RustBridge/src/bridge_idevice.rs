@@ -2,6 +2,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
 use crate::idevice_support::apps::fetch_all_apps_rppairing;
+use crate::idevice_support::backup::{backup_app_rppairing, extract_zip_rppairing};
 use crate::idevice_support::mounter::mount_personalized_ddi_rppairing;
 use crate::idevice_support::rsd::set_rppairing_file;
 use crate::idevice_support::{
@@ -212,4 +213,36 @@ pub extern "C" fn rust_bridge_idevice_mount_personalized_ddi(
     RUNTIME.block_on(async move {
         mount_personalized_ddi_rppairing(image, trustcache, manifest).await
     })
+}
+
+#[no_mangle]
+pub extern "C" fn rust_bridge_idevice_backup_app(
+    bundle_id: *const c_char,
+    output_dir: *const c_char,
+) -> *mut c_char {
+    let bid = unsafe { CStr::from_ptr(bundle_id) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    let out = unsafe { CStr::from_ptr(output_dir) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    to_char(RUNTIME.block_on(async move { backup_app_rppairing(&bid, &out).await }))
+}
+
+#[no_mangle]
+pub extern "C" fn rust_bridge_extract_zip(
+    zip_path: *const c_char,
+    output_dir: *const c_char,
+) -> *mut c_char {
+    let z = unsafe { CStr::from_ptr(zip_path) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    let out = unsafe { CStr::from_ptr(output_dir) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    to_char(RUNTIME.block_on(async move { extract_zip_rppairing(&z, &out).await }))
 }

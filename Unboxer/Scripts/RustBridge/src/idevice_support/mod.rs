@@ -1,4 +1,5 @@
 pub(crate) mod apps;
+pub(crate) mod backup;
 pub(crate) mod device;
 pub(crate) mod install;
 pub(crate) mod jit;
