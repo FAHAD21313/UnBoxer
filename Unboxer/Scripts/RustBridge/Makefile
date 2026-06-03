@@ -25,24 +25,18 @@ rust:
 	cd $(RUST_DIR) && cargo build --target aarch64-apple-darwin --release
 
 
-# --- XCFramework from static libs (no C headers needed — Swift uses @_silgen_name) ---
+# --- XCFramework from static libs (no C headers — Swift uses @_silgen_name) ---
 
 xcframework: rust
 	@echo "--- Building RustBridge.xcframework ---"
-
-	@# Empty headers dir required by xcodebuild -create-xcframework -library
-	mkdir -p $(RUST_DIR)/lib/headers
 
 	@# Remove stale xcframework
 	rm -rf $(RUST_DIR)/lib/RustBridge.xcframework
 
 	xcodebuild -create-xcframework \
 		-library $(RUST_DIR)/target/aarch64-apple-ios/release/lib$(TARGET).a \
-		-headers $(RUST_DIR)/lib/headers \
 		-library $(RUST_DIR)/target/aarch64-apple-ios-sim/release/lib$(TARGET).a \
-		-headers $(RUST_DIR)/lib/headers \
 		-library $(RUST_DIR)/target/aarch64-apple-darwin/release/lib$(TARGET).a \
-		-headers $(RUST_DIR)/lib/headers \
 		-output $(RUST_DIR)/lib/RustBridge.xcframework
 
 	@echo "--- Done: RustBridge/lib/RustBridge.xcframework ---"
