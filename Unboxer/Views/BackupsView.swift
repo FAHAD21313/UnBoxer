@@ -245,9 +245,20 @@ struct BackupRowView: View {
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.appName)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.primary)
+                HStack(spacing: 6) {
+                    Text(entry.appName)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                    if entry.isDocumentsOnly {
+                        Text("Documents Only")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.yellow)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.yellow.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
                 Text(entry.bundleID)
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)

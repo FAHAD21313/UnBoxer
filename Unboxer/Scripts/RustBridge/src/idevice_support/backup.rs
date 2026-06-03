@@ -1,10 +1,8 @@
 use std::io::Write;
 use std::path::Path;
 
-use idevice::{
-    afc::opcode::AfcFopenMode,
-    house_arrest::HouseArrestClient,
-};
+use idevice::afc::opcode::AfcFopenMode;
+use idevice::house_arrest::HouseArrestClient;
 use tokio::io::AsyncReadExt;
 
 use crate::idevice_support::rsd::connect_to_rsd_services;
@@ -17,14 +15,34 @@ pub async fn backup_app_rppairing(bundle_id: &str, output_dir: &str) -> String {
 }
 
 async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String> {
-    let house_arrest = connect_to_rsd_services::<HouseArrestClient>()
+    let ha = connect_to_rsd_services::<HouseArrestClient>()
         .await
         .map_err(|e| format!("house_arrest connect: {e}"))?;
 
-    let mut afc = house_arrest
-        .vend_container(bundle_id)
-        .await
-        .map_err(|e| format!("vend_container: {e}"))?;
+    let (mut afc, backup_type) = match ha.vend_container(bundle_id).await {
+        Ok(c) => (c, "full"),
+        Err(e1) => {
+            let ha2 = connect_to_rsd_services::<HouseArrestClient>()
+                .await
+                .map_err(|e2| {
+                    format!(
+                        "backup failed for '{bundle_id}': \
+                         vend_container: {e1}; \
+                         then reconnect for fallback failed: {e2}"
+                    )
+                })?;
+            match ha2.vend_documents(bundle_id).await {
+                Ok(c) => (c, "documents"),
+                Err(e2) => {
+                    return Err(format!(
+                        "backup failed for '{bundle_id}': \
+                         vend_container: {e1}; \
+                         vend_documents: {e2}"
+                    ))
+                }
+            }
+        }
+    };
 
     let out_path = Path::new(output_dir);
     std::fs::create_dir_all(out_path)
@@ -99,9 +117,10 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
 
     let z = zip_path.to_string_lossy();
     Ok(format!(
-        r#"{{"status":"success","zip_path":"{}","total_bytes":{}}}"#,
+        r#"{{"status":"success","zip_path":"{}","total_bytes":{},"backup_type":"{}"}}"#,
         escape_json(&z),
-        total_bytes
+        total_bytes,
+        backup_type,
     ))
 }
 
@@ -117,8 +136,8 @@ async fn try_extract(zip_path: &str, output_dir: &str) -> Result<String, String>
     std::fs::create_dir_all(out_path)
         .map_err(|e| format!("create extract dir: {e}"))?;
 
-    let file = std::fs::File::open(zip_path)
-        .map_err(|e| format!("open zip: {e}"))?;
+    let file =
+        std::fs::File::open(zip_path).map_err(|e| format!("open zip: {e}"))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| format!("read zip: {e}"))?;
 

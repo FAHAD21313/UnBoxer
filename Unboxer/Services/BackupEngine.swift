@@ -35,6 +35,7 @@ class BackupEngine {
         }
 
         let totalSize = (try? fm.attributesOfItem(atPath: zipPath)[.size] as? Int64) ?? 0
+        let isDocs = (dict["backup_type"] as? String) == "documents"
 
         let entry = BackupEntry(
             appName: appName,
@@ -42,7 +43,8 @@ class BackupEngine {
             version: version,
             date: Date(),
             totalSize: totalSize,
-            relativePath: relPath
+            relativePath: relPath,
+            isDocumentsOnly: isDocs
         )
         let metaData = try JSONEncoder().encode(entry)
         try metaData.write(to: backupDir.appendingPathComponent("metadata.json"))
