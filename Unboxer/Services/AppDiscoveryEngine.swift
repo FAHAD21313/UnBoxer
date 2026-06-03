@@ -2,16 +2,16 @@ import Foundation
 
 // MARK: - Native C Bindings (libimobiledevice)
 @_silgen_name("idevice_new")
-internal func _idevice_new(_ device: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ udid: UnsafePointer<Int8>?) -> Int32
+internal func _idevice_new(_ device: UnsafeMutablePointer<UnsafeMutableRawPointer?>, _ udid: UnsafePointer<Int8>?) -> Int32
 
 @_silgen_name("idevice_free")
 internal func _idevice_free(_ device: UnsafeMutableRawPointer?) -> Int32
 
 @_silgen_name("lockdownd_client_new_with_handshake")
-internal func _lockdownd_client_new_with_handshake(_ device: UnsafeMutableRawPointer?, _ client: UnsafeMutablePointer<UnsafeMutableRawPointer?>?, _ label: UnsafePointer<Int8>?) -> Int32
+internal func _lockdownd_client_new_with_handshake(_ device: UnsafeMutableRawPointer?, _ client: UnsafeMutablePointer<UnsafeMutableRawPointer?>, _ label: UnsafePointer<Int8>?) -> Int32
 
 @_silgen_name("lockdownd_start_service")
-internal func _lockdownd_start_service(_ client: UnsafeMutableRawPointer?, _ identifier: UnsafePointer<Int8>?, _ service: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> Int32
+internal func _lockdownd_start_service(_ client: UnsafeMutableRawPointer?, _ identifier: UnsafePointer<Int8>?, _ service: UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32
 
 @_silgen_name("lockdownd_client_free")
 internal func _lockdownd_client_free(_ client: UnsafeMutableRawPointer?) -> Int32
@@ -20,10 +20,10 @@ internal func _lockdownd_client_free(_ client: UnsafeMutableRawPointer?) -> Int3
 internal func _lockdownd_service_descriptor_free(_ service: UnsafeMutableRawPointer?) -> Int32
 
 @_silgen_name("instproxy_client_new")
-internal func _instproxy_client_new(_ device: UnsafeMutableRawPointer?, _ service: UnsafeMutableRawPointer?, _ client: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> Int32
+internal func _instproxy_client_new(_ device: UnsafeMutableRawPointer?, _ service: UnsafeMutableRawPointer?, _ client: UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32
 
 @_silgen_name("instproxy_browse")
-internal func _instproxy_browse(_ client: UnsafeMutableRawPointer?, _ client_options: UnsafeMutableRawPointer?, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>?) -> Int32
+internal func _instproxy_browse(_ client: UnsafeMutableRawPointer?, _ client_options: UnsafeMutableRawPointer?, _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32
 
 @_silgen_name("instproxy_client_free")
 internal func _instproxy_client_free(_ client: UnsafeMutableRawPointer?) -> Int32
@@ -45,13 +45,10 @@ internal func _plist_array_append_item(_ node: UnsafeMutableRawPointer?, _ item:
 internal func _plist_dict_set_item(_ node: UnsafeMutableRawPointer?, _ key: UnsafePointer<Int8>?, _ item: UnsafeMutableRawPointer?)
 
 @_silgen_name("plist_to_xml")
-internal func _plist_to_xml(_ node: UnsafeMutableRawPointer?, _ xml: UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>?, _ length: UnsafeMutablePointer<UInt32>?)
+internal func _plist_to_xml(_ node: UnsafeMutableRawPointer?, _ xml: UnsafeMutablePointer<UnsafeMutablePointer<Int8>?>, _ length: UnsafeMutablePointer<UInt32>)
 
 @_silgen_name("plist_free")
 internal func _plist_free(_ node: UnsafeMutableRawPointer?)
-
-@_silgen_name("free")
-internal func _c_free(_ ptr: UnsafeMutableRawPointer?)
 
 // MARK: - Models
 public struct AppInfo: Identifiable {
@@ -146,9 +143,10 @@ public class AppDiscoveryEngine {
         guard let validXmlPtr = xmlPtr else {
             throw NSError(domain: "AppDiscoveryEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert apps plist to XML."])
         }
-        defer { _c_free(UnsafeMutableRawPointer(validXmlPtr)) }
+        defer { free(UnsafeMutableRawPointer(validXmlPtr)) }
         
-        let xmlString = String(cString: validXmlPtr)
+        let safePointer = UnsafePointer<CChar>(validXmlPtr)
+        let xmlString = String(cString: safePointer)
         guard let data = xmlString.data(using: .utf8),
               let appsArray = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [[String: Any]] else {
             throw NSError(domain: "AppDiscoveryEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Swift plist from XML."])
