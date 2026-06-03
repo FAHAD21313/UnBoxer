@@ -7,7 +7,7 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 RUST_DIR="$DIR/RustBridge"
-DEPS_DIR="$DIR/../Unboxer/Dependencies"
+DEPS_DIR="$DIR/../Dependencies"
 
 echo "➡️ Building RustBridge.xcframework from source..."
 cd "$RUST_DIR"
