@@ -20,6 +20,14 @@ targets:
         - $(inherited)
         - "Unboxer/Dependencies/libplist/include"
         - "Unboxer/Dependencies/libplist/libcnary/include"
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - "HAVE_OPENSSL=1"
+        - "HAVE_STPNCPY=1"
+        - "HAVE_STPCPY=1"
+        - "HAVE_VASPRINTF=1"
+        - "HAVE_ASPRINTF=1"
+        - "HAVE_GETIFADDRS=1"
+        - "HAVE_STRNDUP=1"
 
   libusbmuxd:
     type: library.static
@@ -35,6 +43,14 @@ targets:
         - $(inherited)
         - "Unboxer/Dependencies/libusbmuxd/include"
         - "Unboxer/Dependencies/libplist/include"
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - "HAVE_OPENSSL=1"
+        - "HAVE_STPNCPY=1"
+        - "HAVE_STPCPY=1"
+        - "HAVE_VASPRINTF=1"
+        - "HAVE_ASPRINTF=1"
+        - "HAVE_GETIFADDRS=1"
+        - "HAVE_STRNDUP=1"
 
   libimobiledevice-glue:
     type: library.static
@@ -50,6 +66,14 @@ targets:
         - $(inherited)
         - "Unboxer/Dependencies/libimobiledevice-glue/include"
         - "Unboxer/Dependencies/libplist/include"
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - "HAVE_OPENSSL=1"
+        - "HAVE_STPNCPY=1"
+        - "HAVE_STPCPY=1"
+        - "HAVE_VASPRINTF=1"
+        - "HAVE_ASPRINTF=1"
+        - "HAVE_GETIFADDRS=1"
+        - "HAVE_STRNDUP=1"
 
   libimobiledevice:
     type: library.static
@@ -72,9 +96,14 @@ targets:
         - "Unboxer/Dependencies/libimobiledevice-glue/include"
         - "Unboxer/Dependencies/libusbmuxd/include"
         - "Unboxer/Dependencies/libplist/include"
-        - "Unboxer/Dependencies/OpenSSL.xcframework/ios-arm64/OpenSSL.framework/Headers"
       GCC_PREPROCESSOR_DEFINITIONS: 
         - "HAVE_OPENSSL=1"
+        - "HAVE_STPNCPY=1"
+        - "HAVE_STPCPY=1"
+        - "HAVE_VASPRINTF=1"
+        - "HAVE_ASPRINTF=1"
+        - "HAVE_GETIFADDRS=1"
+        - "HAVE_STRNDUP=1"
 
   Unboxer:
     type: application
