@@ -1,7 +1,15 @@
-name: Build Unboxer IPA
+name: Build and Release Unboxer IPA
 
 on:
-  workflow_dispatch: # Manual trigger ONLY
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version Number (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write # Essential for creating a Release
 
 jobs:
   build:
@@ -15,7 +23,6 @@ jobs:
       
       - name: Generate Xcode Project (if needed)
         run: |
-          # If we use XcodeGen in the future
           if [ -f "project.yml" ]; then
             brew install xcodegen
             xcodegen generate
@@ -38,10 +45,14 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build/Unboxer.app Payload/
-          zip -r Unboxer.ipa Payload
+          zip -qr Unboxer.ipa Payload
           
-      - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: Unboxer-IPA
-          path: Unboxer.ipa
+          tag_name: v${{ github.event.inputs.version }}
+          name: Unboxer Release v${{ github.event.inputs.version }}
+          files: Unboxer.ipa
+          draft: false
+          prerelease: false
+          generate_release_notes: true
