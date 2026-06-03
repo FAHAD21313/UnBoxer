@@ -10,6 +10,9 @@ targets:
     sources:
       - path: Unboxer/Dependencies/libplist/src
         compilerFlags: ["-w"]
+        excludes:
+          - "**/*.cpp"
+          - "**/out-*.c"
       - path: Unboxer/Dependencies/libplist/libcnary
         compilerFlags: ["-w"]
     settings:
@@ -65,9 +68,11 @@ targets:
       HEADER_SEARCH_PATHS:
         - $(inherited)
         - "Unboxer/Dependencies/libimobiledevice/include"
+        - "Unboxer/Dependencies/libimobiledevice/src"
         - "Unboxer/Dependencies/libimobiledevice-glue/include"
         - "Unboxer/Dependencies/libusbmuxd/include"
         - "Unboxer/Dependencies/libplist/include"
+        - "Unboxer/Dependencies/OpenSSL.xcframework/ios-arm64/OpenSSL.framework/Headers"
       GCC_PREPROCESSOR_DEFINITIONS: 
         - "HAVE_OPENSSL=1"
 
