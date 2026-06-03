@@ -28,6 +28,8 @@ targets:
         - "HAVE_ASPRINTF=1"
         - "HAVE_GETIFADDRS=1"
         - "HAVE_STRNDUP=1"
+        - 'PACKAGE_STRING="\"Unboxer\""'
+        - 'PACKAGE_VERSION="\"1.0.0\""'
 
   libusbmuxd:
     type: library.static
@@ -53,6 +55,8 @@ targets:
         - "HAVE_ASPRINTF=1"
         - "HAVE_GETIFADDRS=1"
         - "HAVE_STRNDUP=1"
+        - 'PACKAGE_STRING="\"Unboxer\""'
+        - 'PACKAGE_VERSION="\"1.0.0\""'
 
   libimobiledevice-glue:
     type: library.static
@@ -76,6 +80,8 @@ targets:
         - "HAVE_ASPRINTF=1"
         - "HAVE_GETIFADDRS=1"
         - "HAVE_STRNDUP=1"
+        - 'PACKAGE_STRING="\"Unboxer\""'
+        - 'PACKAGE_VERSION="\"1.0.0\""'
 
   libimobiledevice:
     type: library.static
@@ -109,6 +115,8 @@ targets:
         - "HAVE_ASPRINTF=1"
         - "HAVE_GETIFADDRS=1"
         - "HAVE_STRNDUP=1"
+        - 'PACKAGE_STRING="\"Unboxer\""'
+        - 'PACKAGE_VERSION="\"1.0.0\""'
 
   Unboxer:
     type: application
