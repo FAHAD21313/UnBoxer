@@ -3,7 +3,7 @@ use std::os::raw::c_char;
 
 use crate::idevice_support::apps::fetch_all_apps_rppairing;
 use crate::idevice_support::backup::{backup_app_rppairing, extract_zip_rppairing};
-use crate::idevice_support::deep_backup::deep_backup_rppairing;
+use crate::idevice_support::deep_backup::{deep_backup_progress_json, deep_backup_rppairing};
 use crate::idevice_support::mounter::mount_personalized_ddi_rppairing;
 use crate::idevice_support::rsd::set_rppairing_file;
 use crate::idevice_support::{
@@ -255,4 +255,12 @@ pub extern "C" fn rust_bridge_idevice_deep_backup(work_dir: *const c_char) -> *m
         .unwrap_or("")
         .to_string();
     to_char(RUNTIME.block_on(async move { deep_backup_rppairing(&wd).await }))
+}
+
+// Poll-only progress snapshot for an in-flight deep backup. Reads atomics, no
+// runtime involvement, so it is safe to call from any thread while
+// rust_bridge_idevice_deep_backup is blocking another one.
+#[no_mangle]
+pub extern "C" fn rust_bridge_idevice_deep_backup_progress() -> *mut c_char {
+    to_char(deep_backup_progress_json())
 }

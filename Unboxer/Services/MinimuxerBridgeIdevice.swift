@@ -103,6 +103,9 @@ internal func _rust_bridge_idevice_deep_backup(
     _ workDir: UnsafePointer<Int8>?
 ) -> UnsafeMutablePointer<Int8>?
 
+@_silgen_name("rust_bridge_idevice_deep_backup_progress")
+internal func _rust_bridge_idevice_deep_backup_progress() -> UnsafeMutablePointer<Int8>?
+
 
 
 // MARK: - Error Handling
@@ -225,6 +228,24 @@ public class RustIdevice {
             throw NSError(domain: "RustIdevice", code: -13, userInfo: [NSLocalizedDescriptionKey: "Missing backup_root/source in deep backup response"])
         }
         return (root, source)
+    }
+
+    /// Snapshot of an in-flight deep backup. `percent` is nil until the device
+    /// reports its first overall-progress value. Safe to call from any thread
+    /// while `deepBackup(workDir:)` is blocking another one.
+    public static func deepBackupProgress() -> (percent: Double?, bytesDone: Int64, files: Int)? {
+        guard let ptr = _rust_bridge_idevice_deep_backup_progress() else { return nil }
+        defer { _rust_bridge_idevice_free_string(ptr) }
+        let json = String(cString: ptr)
+        guard let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let rawPercent = (dict["percent"] as? NSNumber)?.doubleValue ?? -1
+        return (
+            percent: rawPercent >= 0 ? min(rawPercent, 100) : nil,
+            bytesDone: (dict["bytes_done"] as? NSNumber)?.int64Value ?? 0,
+            files: (dict["files"] as? NSNumber)?.intValue ?? 0
+        )
     }
 
     public static func installIpa(bundleId: String) throws {

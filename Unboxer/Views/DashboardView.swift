@@ -177,7 +177,37 @@ struct DashboardView: View {
                             Text("Installed Apps (\(viewModel.apps.count))")
                                 .font(.system(size: 18, weight: .bold))
                                 .padding(.top, 10)
-                            
+
+                            // Deep backup progress card (percent + ETA)
+                            if let deep = viewModel.deepProgress {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "externaldrive.badge.timemachine")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(.purple)
+                                        Text("Deep Backup \u{2014} \(deep.appName)")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text(deep.percentText)
+                                            .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                            .foregroundColor(.purple)
+                                    }
+                                    ProgressView(value: deep.fraction ?? 0)
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .purple))
+                                        .animation(.easeInOut(duration: 0.4), value: deep.fraction)
+                                    Text(deep.detailText)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .padding(12)
+                                .background(Color.purple.opacity(0.08))
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.25), lineWidth: 1))
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+
                             ScrollView {
                                 LazyVStack(spacing: 12) {
                                     ForEach(viewModel.apps) { app in
@@ -276,6 +306,7 @@ struct DashboardView: View {
                 .padding(.horizontal)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.showAppList)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.isLogsFolded)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.deepProgress == nil)
             }
             
             Spacer()

@@ -1873,6 +1873,7 @@ name = "rust_bridge"
 version = "1.0.0"
 dependencies = [
  "idevice",
+ "libc",
  "log",
  "once_cell",
  "plist",

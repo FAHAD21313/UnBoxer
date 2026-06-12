@@ -15,6 +15,16 @@ class DashboardViewModel: ObservableObject {
     @Published var backupError: String?
     @Published var backupSuccessMessage: String?
     @Published var showBackupToast: Bool = false
+    @Published var deepProgress: DeepProgressUI?
+
+    /// Display-ready deep backup progress for the dashboard card.
+    struct DeepProgressUI: Equatable {
+        var appName: String
+        /// 0...1; nil while the device has not reported progress yet.
+        var fraction: Double?
+        var percentText: String
+        var detailText: String
+    }
     
     /// Triggered from the UI when "Start Engine Test" is tapped.
     /// Configures the native engine from the pairing file, verifies connectivity,
@@ -114,16 +124,29 @@ class DashboardViewModel: ObservableObject {
         backupError = nil
         backupSuccessMessage = nil
 
+        deepProgress = DeepProgressUI(
+            appName: appName, fraction: nil,
+            percentText: "\u{2026}", detailText: "Contacting device\u{2026}"
+        )
+
         Task {
             do {
                 let entry = try await DeepBackupEngine.shared.deepBackupApp(
                     bundleID: bundleID,
                     appName: appName,
-                    version: version
+                    version: version,
+                    onProgress: { progress in
+                        Task { @MainActor in
+                            // Ignore stale poller ticks after completion/failure.
+                            guard self.deepProgress != nil else { return }
+                            self.deepProgress = Self.formatDeepProgress(progress, appName: appName)
+                        }
+                    }
                 )
                 await MainActor.run {
                     self.isBackingUp = false
                     self.backingUpBundleID = nil
+                    self.deepProgress = nil
                     self.backupSuccessMessage = "Deep backup of \(appName) completed \u{2014} \(entry.fileCount ?? 0) files."
                     self.showBackupToast = true
                 }
@@ -131,10 +154,52 @@ class DashboardViewModel: ObservableObject {
                 await MainActor.run {
                     self.isBackingUp = false
                     self.backingUpBundleID = nil
+                    self.deepProgress = nil
                     self.backupError = error.localizedDescription
                     self.showBackupToast = true
                 }
             }
         }
     }
+
+    private static func formatDeepProgress(_ p: DeepBackupProgress, appName: String) -> DeepProgressUI {
+        let percentText = p.fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "\u{2026}"
+
+        var details: [String] = []
+        switch p.phase {
+        case .waitingForDevice:
+            details.append("Waiting for the device to start the snapshot\u{2026}")
+        case .snapshotting:
+            if let eta = p.etaSeconds, let etaText = Self.remainingFormatter.string(from: max(eta, 1)) {
+                details.append("about \(etaText) left")
+            } else {
+                details.append("estimating time left\u{2026}")
+            }
+            if p.bytesDone > 0 {
+                details.append(ByteCountFormatter.string(fromByteCount: p.bytesDone, countStyle: .file))
+            }
+            if p.files > 0 {
+                details.append("\(p.files) files")
+            }
+        case .extracting:
+            details.append("Extracting \(appName)\u{2019}s data\u{2026}")
+        case .finishing:
+            details.append("Cleaning up\u{2026}")
+        }
+
+        return DeepProgressUI(
+            appName: appName,
+            fraction: p.fraction,
+            percentText: percentText,
+            detailText: details.joined(separator: " \u{2022} ")
+        )
+    }
+
+    private static let remainingFormatter: DateComponentsFormatter = {
+        let f = DateComponentsFormatter()
+        f.allowedUnits = [.hour, .minute, .second]
+        f.unitsStyle = .abbreviated
+        f.maximumUnitCount = 2
+        return f
+    }()
 }

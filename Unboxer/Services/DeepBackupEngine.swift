@@ -1,6 +1,44 @@
 import Foundation
 import SQLite3
 
+/// Live progress of a deep backup, delivered to the UI while it runs.
+struct DeepBackupProgress: Equatable, Sendable {
+    enum Phase: Equatable, Sendable {
+        case waitingForDevice   // snapshot requested, device has not reported progress yet
+        case snapshotting       // device streaming the whole-device snapshot
+        case extracting         // pulling the app's domain out of Manifest.db
+        case finishing          // cleanup + metadata
+    }
+
+    var phase: Phase
+    /// Overall fraction 0...1 across all phases; nil while indeterminate.
+    var fraction: Double?
+    /// Bytes received from the device so far (snapshot phase).
+    var bytesDone: Int64
+    /// Files received from the device so far (snapshot phase).
+    var files: Int
+    /// Estimated seconds remaining; nil while there is not enough signal.
+    var etaSeconds: TimeInterval?
+}
+
+/// Estimates time remaining from the device-reported percentage: rate over a
+/// sliding window of recent samples, so stalls honestly degrade to "unknown"
+/// instead of freezing on a stale number.
+private struct DeepBackupETAEstimator {
+    private var samples: [(time: Date, percent: Double)] = []
+
+    mutating func update(percent: Double) -> TimeInterval? {
+        let now = Date()
+        samples.append((now, percent))
+        samples.removeAll { now.timeIntervalSince($0.time) > 90 }
+        guard let oldest = samples.first, samples.count >= 2 else { return nil }
+        let deltaPercent = percent - oldest.percent
+        let deltaTime = now.timeIntervalSince(oldest.time)
+        guard deltaPercent > 0.05, deltaTime > 2 else { return nil }
+        return (100 - percent) / (deltaPercent / deltaTime)
+    }
+}
+
 /// Per-app backup for apps that house_arrest cannot vend (production App Store
 /// apps). It drives a whole-device mobilebackup2 backup into a working folder,
 /// then extracts ONLY the requested app's domain (AppDomain-<bundleID>, plus its
@@ -26,17 +64,62 @@ class DeepBackupEngine {
         return docs.appendingPathComponent("DeepBackupWork", isDirectory: true)
     }
 
-    func deepBackupApp(bundleID: String, appName: String, version: String) async throws -> BackupEntry {
+    /// The device snapshot dominates the runtime, so it owns the bar up to
+    /// this fraction; local extraction fills the rest.
+    private static let snapshotShare = 0.95
+
+    func deepBackupApp(
+        bundleID: String,
+        appName: String,
+        version: String,
+        onProgress: @escaping @Sendable (DeepBackupProgress) -> Void = { _ in }
+    ) async throws -> BackupEntry {
         // Start from a clean working directory for the raw device backup.
         let workDir = workDirectoryURL
         try? fm.removeItem(at: workDir)
         try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
 
-        // 1) Whole-device backup (heavy) off the main thread.
+        onProgress(DeepBackupProgress(phase: .waitingForDevice, fraction: nil, bytesDone: 0, files: 0, etaSeconds: nil))
+
+        // 1) Whole-device backup (heavy) off the main thread, with a sibling
+        //    task polling the Rust-side progress atomics until it finishes.
         let workPath = workDir.path
-        let result = try await Task.detached(priority: .userInitiated) {
+        let backupTask = Task.detached(priority: .userInitiated) {
             try RustIdevice.deepBackup(workDir: workPath)
-        }.value
+        }
+        let poller = Task.detached {
+            var eta = DeepBackupETAEstimator()
+            while !Task.isCancelled {
+                if let snap = RustIdevice.deepBackupProgress() {
+                    if let percent = snap.percent {
+                        onProgress(DeepBackupProgress(
+                            phase: .snapshotting,
+                            fraction: percent / 100.0 * DeepBackupEngine.snapshotShare,
+                            bytesDone: snap.bytesDone,
+                            files: snap.files,
+                            etaSeconds: eta.update(percent: percent)
+                        ))
+                    } else {
+                        onProgress(DeepBackupProgress(
+                            phase: .waitingForDevice, fraction: nil,
+                            bytesDone: snap.bytesDone, files: snap.files, etaSeconds: nil
+                        ))
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+            }
+        }
+        defer { poller.cancel() }
+
+        let result: (root: String, source: String)
+        do {
+            result = try await backupTask.value
+        } catch {
+            try? fm.removeItem(at: workDir)
+            throw error
+        }
+        poller.cancel()
+        let snapshotStats = RustIdevice.deepBackupProgress()
         let deviceBackupDir = URL(fileURLWithPath: result.root)
             .appendingPathComponent(result.source, isDirectory: true)
 
@@ -50,9 +133,23 @@ class DeepBackupEngine {
         try fm.createDirectory(at: extractedDir, withIntermediateDirectories: true)
 
         // 3) Pull just this app's domain out of Manifest.db.
+        let deviceBytes = snapshotStats?.bytesDone ?? 0
+        let deviceFiles = snapshotStats?.files ?? 0
+        onProgress(DeepBackupProgress(
+            phase: .extracting, fraction: Self.snapshotShare,
+            bytesDone: deviceBytes, files: deviceFiles, etaSeconds: nil
+        ))
         let stats: ExtractStats
         do {
-            stats = try extractDomain(bundleID: bundleID, deviceBackupDir: deviceBackupDir, into: extractedDir)
+            stats = try extractDomain(bundleID: bundleID, deviceBackupDir: deviceBackupDir, into: extractedDir) { done, total in
+                guard total > 0 else { return }
+                let extractFraction = Double(done) / Double(total)
+                onProgress(DeepBackupProgress(
+                    phase: .extracting,
+                    fraction: Self.snapshotShare + extractFraction * (1.0 - Self.snapshotShare),
+                    bytesDone: deviceBytes, files: deviceFiles, etaSeconds: nil
+                ))
+            }
         } catch {
             try? fm.removeItem(at: workDir)
             try? fm.removeItem(at: backupDir)
@@ -60,6 +157,10 @@ class DeepBackupEngine {
         }
 
         // 4) Drop the raw device backup to reclaim space.
+        onProgress(DeepBackupProgress(
+            phase: .finishing, fraction: 1.0,
+            bytesDone: deviceBytes, files: deviceFiles, etaSeconds: nil
+        ))
         try? fm.removeItem(at: workDir)
 
         if stats.files == 0 && stats.dirs == 0 {
@@ -101,7 +202,12 @@ class DeepBackupEngine {
     /// every hashed blob belonging to the app's domains into `extractedDir`
     /// under its real relative path. iOS backup layout: a file with id <fileID>
     /// lives at <deviceBackupDir>/<first 2 hex of fileID>/<fileID>.
-    private func extractDomain(bundleID: String, deviceBackupDir: URL, into extractedDir: URL) throws -> ExtractStats {
+    private func extractDomain(
+        bundleID: String,
+        deviceBackupDir: URL,
+        into extractedDir: URL,
+        onRow: (_ done: Int, _ total: Int) -> Void = { _, _ in }
+    ) throws -> ExtractStats {
         let manifestPath = deviceBackupDir.appendingPathComponent("Manifest.db").path
         guard fm.fileExists(atPath: manifestPath) else {
             throw NSError(domain: "DeepBackupEngine", code: -20, userInfo: [NSLocalizedDescriptionKey:
@@ -116,7 +222,25 @@ class DeepBackupEngine {
         }
         defer { sqlite3_close(db) }
 
-        let sql = "SELECT fileID, relativePath, flags FROM Files WHERE domain = ?1 OR domain LIKE ?2;"
+        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        let domainFilter = "domain = ?1 OR domain LIKE ?2"
+        let exactDomain = "AppDomain-\(bundleID)"
+        // App-extension (plugin) domains for this app, e.g. AppDomainPlugin-<id>.<ext>
+        let pluginDomains = "AppDomainPlugin-\(bundleID)%"
+
+        // Row count up front so extraction can report a real fraction.
+        var totalRows = 0
+        var countStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM Files WHERE \(domainFilter);", -1, &countStmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(countStmt, 1, exactDomain, -1, transient)
+            sqlite3_bind_text(countStmt, 2, pluginDomains, -1, transient)
+            if sqlite3_step(countStmt) == SQLITE_ROW {
+                totalRows = Int(sqlite3_column_int(countStmt, 0))
+            }
+        }
+        sqlite3_finalize(countStmt)
+
+        let sql = "SELECT fileID, relativePath, flags FROM Files WHERE \(domainFilter);"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
             throw NSError(domain: "DeepBackupEngine", code: -22, userInfo: [NSLocalizedDescriptionKey:
@@ -124,13 +248,16 @@ class DeepBackupEngine {
         }
         defer { sqlite3_finalize(stmt) }
 
-        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        sqlite3_bind_text(stmt, 1, "AppDomain-\(bundleID)", -1, transient)
-        // App-extension (plugin) domains for this app, e.g. AppDomainPlugin-<id>.<ext>
-        sqlite3_bind_text(stmt, 2, "AppDomainPlugin-\(bundleID)%", -1, transient)
+        sqlite3_bind_text(stmt, 1, exactDomain, -1, transient)
+        sqlite3_bind_text(stmt, 2, pluginDomains, -1, transient)
 
         var stats = ExtractStats()
+        var rowsDone = 0
         while sqlite3_step(stmt) == SQLITE_ROW {
+            rowsDone += 1
+            if rowsDone % 25 == 0 || rowsDone == totalRows {
+                onRow(rowsDone, totalRows)
+            }
             guard let fidC = sqlite3_column_text(stmt, 0) else { continue }
             let fileID = String(cString: fidC)
             let rel = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
