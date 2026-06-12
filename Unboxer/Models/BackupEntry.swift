@@ -8,6 +8,7 @@ struct BackupEntry: Identifiable, Codable {
     let date: Date
     let totalSize: Int64
     let relativePath: String
+    var isDocumentsOnly: Bool = false
 
     var displayDate: String {
         let f = DateFormatter()

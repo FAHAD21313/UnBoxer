@@ -5,6 +5,7 @@ struct DashboardView: View {
     @EnvironmentObject var pairingManager: PairingManager
     @StateObject private var viewModel = DashboardViewModel()
     @State private var showFileImporter = false
+    @State private var backupToast: Toast? = nil
     
     var body: some View {
         VStack(spacing: 20) {
@@ -212,6 +213,29 @@ struct DashboardView: View {
                                                 .padding(.vertical, 4)
                                                 .background(Color.white.opacity(0.1))
                                                 .clipShape(Capsule())
+                                            
+                                            Button(action: {
+                                                viewModel.performBackup(
+                                                    bundleID: app.bundleID,
+                                                    appName: app.name,
+                                                    version: app.version
+                                                )
+                                            }) {
+                                                if viewModel.backingUpBundleID == app.bundleID {
+                                                    ProgressView()
+                                                        .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                                                        .scaleEffect(0.8)
+                                                        .frame(width: 32, height: 32)
+                                                } else {
+                                                    Image(systemName: "archivebox")
+                                                        .font(.system(size: 14, weight: .bold))
+                                                        .foregroundColor(.blue)
+                                                        .frame(width: 32, height: 32)
+                                                        .background(Color.blue.opacity(0.1))
+                                                        .clipShape(Circle())
+                                                }
+                                            }
+                                            .disabled(viewModel.backingUpBundleID == app.bundleID || viewModel.isBackingUp)
                                         }
                                         .padding()
                                         .background(Color.black.opacity(0.2))
@@ -237,6 +261,46 @@ struct DashboardView: View {
             }
             
             Spacer()
+            
+            // Toast overlay
+            if let toast = backupToast {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 10) {
+                        Image(systemName: toast.isError ? "xmark.circle.fill" : "checkmark.circle.fill")
+                            .foregroundColor(toast.isError ? .red : .green)
+                        Text(toast.message)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.75), value: backupToast?.id)
+            }
+        }
+        .onChange(of: viewModel.showBackupToast) { show in
+            if show {
+                let msg = viewModel.backupSuccessMessage ?? viewModel.backupError ?? ""
+                let isErr = viewModel.backupError != nil
+                withAnimation { backupToast = Toast(id: UUID(), message: msg, isError: isErr) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation { backupToast = nil }
+                    viewModel.showBackupToast = false
+                }
+            }
         }
     }
+}
+
+struct Toast: Identifiable, Equatable {
+    let id: UUID
+    let message: String
+    let isError: Bool
 }
