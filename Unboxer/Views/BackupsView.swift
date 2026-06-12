@@ -260,6 +260,15 @@ struct BackupRowView: View {
                             .background(Color.yellow.opacity(0.15))
                             .clipShape(Capsule())
                     }
+                    if entry.partial {
+                        Text("Partial")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
                 }
                 Text(entry.bundleID)
                     .font(.system(size: 12))
@@ -268,6 +277,11 @@ struct BackupRowView: View {
                 Text("\(entry.displaySize) \u{2022} \(entry.displayDate)")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
+                if let stats = entry.statsLine {
+                    Text(stats)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
             }
 
             Spacer()

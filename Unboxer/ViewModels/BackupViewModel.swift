@@ -72,11 +72,11 @@ class BackupViewModel: ObservableObject {
 
         Task {
             do {
-                _ = try await BackupEngine.shared.backupApp(bundleID: bundleID, appName: appName, version: version)
+                let entry = try await BackupEngine.shared.backupApp(bundleID: bundleID, appName: appName, version: version)
                 await MainActor.run {
                     loadBackups()
                     isBackingUp = false
-                    backupSuccess = "Backup of \(appName) completed successfully."
+                    backupSuccess = entry.successMessage(appName: appName)
                 }
             } catch {
                 await MainActor.run {

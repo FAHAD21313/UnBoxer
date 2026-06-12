@@ -83,7 +83,7 @@ class DashboardViewModel: ObservableObject {
 
         Task {
             do {
-                _ = try await BackupEngine.shared.backupApp(
+                let entry = try await BackupEngine.shared.backupApp(
                     bundleID: bundleID,
                     appName: appName,
                     version: version
@@ -91,7 +91,7 @@ class DashboardViewModel: ObservableObject {
                 await MainActor.run {
                     self.isBackingUp = false
                     self.backingUpBundleID = nil
-                    self.backupSuccessMessage = "Backup of \(appName) completed."
+                    self.backupSuccessMessage = entry.successMessage(appName: appName)
                     self.showBackupToast = true
                 }
             } catch {
