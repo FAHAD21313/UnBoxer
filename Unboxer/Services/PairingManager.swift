@@ -6,6 +6,7 @@ class PairingManager: ObservableObject {
     @Published var hostID: String? = nil
     @Published var systemBUID: String? = nil
     @Published var hasMissingKeys: Bool = false
+    @Published var isRemotePairing: Bool = false
     @Published var errorMessage: String? = nil
     
     private let fileName = "pairing_file.plist"
@@ -35,6 +36,7 @@ class PairingManager: ObservableObject {
                 self.hostID = nil
                 self.systemBUID = nil
                 self.hasMissingKeys = false
+                self.isRemotePairing = false
             }
         }
     }
@@ -83,16 +85,26 @@ class PairingManager: ObservableObject {
         do {
             let data = try Data(contentsOf: url)
             if let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+                // The Rust engine drives device communication through a RemotePairing
+                // file, which is identified by a `private_key` entry rather than the
+                // classic usbmuxd keys (HostID / SystemBUID).
+                let remotePairing = plist["private_key"] != nil
+                let host = plist["HostID"] as? String
+                let buid = plist["SystemBUID"] as? String
                 DispatchQueue.main.async {
-                    self.hostID = plist["HostID"] as? String
-                    self.systemBUID = plist["SystemBUID"] as? String
-                    self.hasMissingKeys = (self.hostID == nil || self.systemBUID == nil)
+                    self.isRemotePairing = remotePairing
+                    self.hostID = host
+                    self.systemBUID = buid
+                    // A RemotePairing file is complete on its own; only classic
+                    // lockdown files need both HostID and SystemBUID.
+                    self.hasMissingKeys = remotePairing ? false : (host == nil || buid == nil)
                 }
             }
         } catch {
             print("Failed to parse plist: \(error.localizedDescription)")
             DispatchQueue.main.async {
                 self.hasMissingKeys = true
+                self.isRemotePairing = false
             }
         }
     }

@@ -74,7 +74,7 @@ pub extern "C" fn rust_bridge_idevice_yeet_app_afc(
 ) -> *mut IdeviceFfiError {
     let bundle_id = unsafe { CStr::from_ptr(bundle_id) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
     let ipa_bytes = unsafe { std::slice::from_raw_parts(ipa_ptr, ipa_len as usize) };
 
@@ -92,7 +92,7 @@ pub extern "C" fn rust_bridge_idevice_install_ipa(
 ) -> *mut IdeviceFfiError {
     let bundle_id = unsafe { CStr::from_ptr(bundle_id) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
     RUNTIME.block_on(async move {
         match install_ipa_rppairing(bundle_id).await {
@@ -106,7 +106,7 @@ pub extern "C" fn rust_bridge_idevice_install_ipa(
 pub extern "C" fn rust_bridge_idevice_remove_app(bundle_id: *const c_char) -> *mut IdeviceFfiError {
     let bundle_id = unsafe { CStr::from_ptr(bundle_id) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
     RUNTIME.block_on(async move {
         match remove_app_rppairing(bundle_id).await {
@@ -120,7 +120,7 @@ pub extern "C" fn rust_bridge_idevice_remove_app(bundle_id: *const c_char) -> *m
 pub extern "C" fn rust_bridge_idevice_debug_app(app_id: *const c_char) -> *mut IdeviceFfiError {
     let app_id = unsafe { CStr::from_ptr(app_id) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
     RUNTIME.block_on(async move {
         match debug_app_rppairing(app_id).await {
@@ -158,7 +158,7 @@ pub extern "C" fn rust_bridge_idevice_install_provisioning_profile(
 pub extern "C" fn rust_bridge_idevice_remove_provisioning_profile(
     id: *const c_char,
 ) -> *mut IdeviceFfiError {
-    let id = unsafe { CStr::from_ptr(id) }.to_str().unwrap().to_string();
+    let id = unsafe { CStr::from_ptr(id) }.to_str().unwrap_or("").to_string();
     RUNTIME.block_on(async move {
         match remove_provisioning_profile_rppairing(id).await {
             Ok(()) => std::ptr::null_mut(),
@@ -173,7 +173,7 @@ pub extern "C" fn rust_bridge_idevice_dump_provisioning_profile(
 ) -> *mut IdeviceFfiError {
     let docs_path = unsafe { CStr::from_ptr(docs_path) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
     RUNTIME.block_on(async move {
         match dump_provisioning_profile_rppairing(docs_path).await {
@@ -189,7 +189,7 @@ pub extern "C" fn rust_bridge_idevice_set_rppairing_file(
 ) -> *mut IdeviceFfiError {
     let pairing_file_str = unsafe { CStr::from_ptr(pairing_file) }
         .to_str()
-        .unwrap()
+        .unwrap_or("")
         .to_string();
 
     match set_rppairing_file(pairing_file_str) {

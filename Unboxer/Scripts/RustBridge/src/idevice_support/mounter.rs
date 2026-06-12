@@ -65,7 +65,13 @@ pub async fn mount_personalized_ddi_rppairing(
             return 6;
         }
     };
-    let conn = &mut *connection;
+    let conn = match connection.as_mut() {
+        Some(c) => c,
+        None => {
+            error!("connection slot unexpectedly empty after create");
+            return 6;
+        }
+    };
     if let Err(e) = mounter
         .mount_personalized_with_callback_rsd(
             &mut conn.adapter,

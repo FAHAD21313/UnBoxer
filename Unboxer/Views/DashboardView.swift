@@ -95,11 +95,9 @@ struct DashboardView: View {
                         
                     Divider().background(Color.white.opacity(0.1)).padding(.vertical, 8)
                     
-                    // Native C Minimuxer Test Section
+                    // Native Engine Test Section
                     Button(action: {
-                        if let hostID = pairingManager.hostID {
-                            viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path, udid: hostID)
-                        }
+                        viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path)
                     }) {
                         HStack(spacing: 10) {
                             if viewModel.isTesting {
@@ -113,10 +111,10 @@ struct DashboardView: View {
                         .foregroundColor(.white)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 20)
-                        .background(pairingManager.hostID == nil ? Color.gray : Color.blue)
+                        .background(viewModel.isTesting ? Color.gray : Color.blue)
                         .clipShape(Capsule())
                     }
-                    .disabled(viewModel.isTesting || pairingManager.hostID == nil)
+                    .disabled(viewModel.isTesting)
                     
                     // Log Terminal
                     if !viewModel.logs.isEmpty {

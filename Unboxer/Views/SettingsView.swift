@@ -32,9 +32,16 @@ struct SettingsView: View {
                     
                     VStack(spacing: 0) {
                         InfoRow(title: "Status", value: "Active", systemImage: "link", iconColor: .green)
-                        
+
                         Divider().background(Color.white.opacity(0.1))
-                        
+
+                        InfoRow(title: "Type",
+                                value: pairingManager.isRemotePairing ? "RemotePairing" : "Lockdown",
+                                systemImage: "lock.shield",
+                                iconColor: .teal)
+
+                        Divider().background(Color.white.opacity(0.1))
+
                         if pairingManager.hasMissingKeys {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
