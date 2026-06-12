@@ -53,7 +53,15 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
         .map_err(|e| format!("create zip: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
 
-    let mut stack = vec![String::new()];
+    // AFC paths are absolute. A full container vend is rooted at "/", while a
+    // documents-only vend can only access "/Documents" (anything else is
+    // permission-denied). Seeding with the wrong root yields an empty archive.
+    let root = if backup_type == "documents" {
+        "/Documents"
+    } else {
+        "/"
+    };
+    let mut stack = vec![root.to_string()];
     let mut total_bytes: i64 = 0;
 
     while let Some(dir) = stack.pop() {
@@ -68,11 +76,15 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
                 continue;
             }
 
-            let full = if dir.is_empty() {
-                entry.clone()
+            let full = if dir == "/" {
+                format!("/{entry}")
             } else {
                 format!("{dir}/{entry}")
             };
+
+            // Zip entry names must be relative so extraction stays inside the
+            // output directory (a leading "/" would make Path::join escape it).
+            let rel = full.trim_start_matches('/').to_string();
 
             let info = match afc.get_file_info(&full).await {
                 Ok(i) => i,
@@ -82,8 +94,8 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
 
             match info.st_ifmt.as_str() {
                 "S_IFDIR" => {
-                    zip.add_directory(&full, zip::write::SimpleFileOptions::default())
-                        .map_err(|e| format!("zip dir {full:?}: {e}"))?;
+                    zip.add_directory(&rel, zip::write::SimpleFileOptions::default())
+                        .map_err(|e| format!("zip dir {rel:?}: {e}"))?;
                     stack.push(full);
                 }
                 "S_IFREG" => {
@@ -93,8 +105,8 @@ async fn try_backup(bundle_id: &str, output_dir: &str) -> Result<String, String>
                         Err(e) => return Err(format!("open {full:?}: {e}")),
                     };
 
-                    zip.start_file(&full, zip::write::SimpleFileOptions::default())
-                        .map_err(|e| format!("zip file {full:?}: {e}"))?;
+                    zip.start_file(&rel, zip::write::SimpleFileOptions::default())
+                        .map_err(|e| format!("zip file {rel:?}: {e}"))?;
 
                     let mut buf = vec![0u8; 65536];
                     loop {
