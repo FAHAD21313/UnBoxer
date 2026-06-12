@@ -200,7 +200,9 @@ struct BackupsView: View {
 
                 Spacer()
 
-                Text(viewModel.currentDirectory?.lastPathComponent ?? "")
+                Text(viewModel.isAtBrowseRoot
+                     ? (viewModel.selectedBackup?.appName ?? "")
+                     : (viewModel.currentDirectory?.lastPathComponent ?? ""))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
