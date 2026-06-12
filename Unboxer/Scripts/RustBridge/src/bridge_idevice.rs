@@ -3,6 +3,7 @@ use std::os::raw::c_char;
 
 use crate::idevice_support::apps::fetch_all_apps_rppairing;
 use crate::idevice_support::backup::{backup_app_rppairing, extract_zip_rppairing};
+use crate::idevice_support::deep_backup::deep_backup_rppairing;
 use crate::idevice_support::mounter::mount_personalized_ddi_rppairing;
 use crate::idevice_support::rsd::set_rppairing_file;
 use crate::idevice_support::{
@@ -245,4 +246,13 @@ pub extern "C" fn rust_bridge_extract_zip(
         .unwrap_or("")
         .to_string();
     to_char(RUNTIME.block_on(async move { extract_zip_rppairing(&z, &out).await }))
+}
+
+#[no_mangle]
+pub extern "C" fn rust_bridge_idevice_deep_backup(work_dir: *const c_char) -> *mut c_char {
+    let wd = unsafe { CStr::from_ptr(work_dir) }
+        .to_str()
+        .unwrap_or("")
+        .to_string();
+    to_char(RUNTIME.block_on(async move { deep_backup_rppairing(&wd).await }))
 }

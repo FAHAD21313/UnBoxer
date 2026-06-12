@@ -239,6 +239,26 @@ struct DashboardView: View {
                                         .background(Color.black.opacity(0.2))
                                         .cornerRadius(16)
                                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+                                        .contextMenu {
+                                            Button {
+                                                viewModel.performBackup(
+                                                    bundleID: app.bundleID,
+                                                    appName: app.name,
+                                                    version: app.version
+                                                )
+                                            } label: {
+                                                Label("Quick Backup (container/documents)", systemImage: "archivebox")
+                                            }
+                                            Button {
+                                                viewModel.performDeepBackup(
+                                                    bundleID: app.bundleID,
+                                                    appName: app.name,
+                                                    version: app.version
+                                                )
+                                            } label: {
+                                                Label("Deep Backup (App Store apps \u{2014} slow)", systemImage: "externaldrive.badge.timemachine")
+                                            }
+                                        }
                                     }
                                 }
                                 .padding(.vertical, 8)

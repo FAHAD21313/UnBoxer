@@ -98,6 +98,11 @@ internal func _rust_bridge_extract_zip(
     _ outputDir: UnsafePointer<Int8>?
 ) -> UnsafeMutablePointer<Int8>?
 
+@_silgen_name("rust_bridge_idevice_deep_backup")
+internal func _rust_bridge_idevice_deep_backup(
+    _ workDir: UnsafePointer<Int8>?
+) -> UnsafeMutablePointer<Int8>?
+
 
 
 // MARK: - Error Handling
@@ -197,6 +202,29 @@ public class RustIdevice {
             let msg = dict["error"] as? String ?? "Unknown error"
             throw NSError(domain: "RustIdevice", code: -6, userInfo: [NSLocalizedDescriptionKey: msg])
         }
+    }
+
+    /// Runs a whole-device backup via mobilebackup2 into `workDir`.
+    /// Returns the backup root and the source (device UDID) subfolder name.
+    public static func deepBackup(workDir: String) throws -> (root: String, source: String) {
+        guard let ptr = _rust_bridge_idevice_deep_backup(workDir) else {
+            throw NSError(domain: "RustIdevice", code: -10, userInfo: [NSLocalizedDescriptionKey: "rust_bridge_idevice_deep_backup returned null"])
+        }
+        defer { _rust_bridge_idevice_free_string(ptr) }
+        let json = String(cString: ptr)
+        guard let data = json.data(using: .utf8),
+              let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = dict["status"] as? String
+        else {
+            throw NSError(domain: "RustIdevice", code: -11, userInfo: [NSLocalizedDescriptionKey: "Failed to parse deep backup response: \(json)"])
+        }
+        if status == "error" {
+            throw NSError(domain: "RustIdevice", code: -12, userInfo: [NSLocalizedDescriptionKey: dict["error"] as? String ?? "Unknown error"])
+        }
+        guard let root = dict["backup_root"] as? String, let source = dict["source"] as? String else {
+            throw NSError(domain: "RustIdevice", code: -13, userInfo: [NSLocalizedDescriptionKey: "Missing backup_root/source in deep backup response"])
+        }
+        return (root, source)
     }
 
     public static func installIpa(bundleId: String) throws {

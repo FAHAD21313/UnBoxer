@@ -104,4 +104,37 @@ class DashboardViewModel: ObservableObject {
             }
         }
     }
+
+    /// Deep backup via mobilebackup2 — for App Store apps whose full container
+    /// house_arrest cannot vend. Heavy on the first run (whole-device snapshot).
+    func performDeepBackup(bundleID: String, appName: String, version: String) {
+        guard !isBackingUp else { return }
+        isBackingUp = true
+        backingUpBundleID = bundleID
+        backupError = nil
+        backupSuccessMessage = nil
+
+        Task {
+            do {
+                let entry = try await DeepBackupEngine.shared.deepBackupApp(
+                    bundleID: bundleID,
+                    appName: appName,
+                    version: version
+                )
+                await MainActor.run {
+                    self.isBackingUp = false
+                    self.backingUpBundleID = nil
+                    self.backupSuccessMessage = "Deep backup of \(appName) completed \u{2014} \(entry.fileCount ?? 0) files."
+                    self.showBackupToast = true
+                }
+            } catch {
+                await MainActor.run {
+                    self.isBackingUp = false
+                    self.backingUpBundleID = nil
+                    self.backupError = error.localizedDescription
+                    self.showBackupToast = true
+                }
+            }
+        }
+    }
 }
