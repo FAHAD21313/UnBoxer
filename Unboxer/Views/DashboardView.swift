@@ -208,6 +208,25 @@ struct DashboardView: View {
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                             }
 
+                            // Diagnostic trace of the last deep backup (phase 1
+                            // of the space-saving redesign) — share it so the
+                            // device's operation sequence can be analyzed.
+                            if let traceURL = viewModel.deepTraceLogURL, viewModel.deepProgress == nil {
+                                ShareLink(item: traceURL) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Share Deep Backup Trace Log")
+                                            .font(.system(size: 12, weight: .medium))
+                                    }
+                                    .foregroundColor(.purple)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(Color.purple.opacity(0.1))
+                                    .clipShape(Capsule())
+                                }
+                            }
+
                             ScrollView {
                                 LazyVStack(spacing: 12) {
                                     ForEach(viewModel.apps) { app in
@@ -333,6 +352,9 @@ struct DashboardView: View {
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.75), value: backupToast?.id)
             }
+        }
+        .onAppear {
+            viewModel.deepTraceLogURL = DeepBackupEngine.shared.traceLogURL
         }
         .onChange(of: viewModel.showBackupToast) { show in
             if show {

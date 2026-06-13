@@ -64,6 +64,15 @@ class DeepBackupEngine {
         return docs.appendingPathComponent("DeepBackupWork", isDirectory: true)
     }
 
+    /// Diagnostic trace written by the Rust side next to the work dir (so it
+    /// survives the work-dir wipe). Used in phase 1 to capture the device's
+    /// mobilebackup2 operation sequence. Present only after a deep backup ran.
+    var traceLogURL: URL? {
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let url = docs.appendingPathComponent("DeepBackupTrace.log")
+        return fm.fileExists(atPath: url.path) ? url : nil
+    }
+
     /// The device snapshot dominates the runtime, so it owns the bar up to
     /// this fraction; local extraction fills the rest.
     private static let snapshotShare = 0.95

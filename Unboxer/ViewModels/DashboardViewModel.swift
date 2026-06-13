@@ -16,6 +16,8 @@ class DashboardViewModel: ObservableObject {
     @Published var backupSuccessMessage: String?
     @Published var showBackupToast: Bool = false
     @Published var deepProgress: DeepProgressUI?
+    /// Diagnostic trace from the last deep backup, offered for sharing (phase 1).
+    @Published var deepTraceLogURL: URL?
 
     /// Display-ready deep backup progress for the dashboard card.
     struct DeepProgressUI: Equatable {
@@ -147,6 +149,7 @@ class DashboardViewModel: ObservableObject {
                     self.isBackingUp = false
                     self.backingUpBundleID = nil
                     self.deepProgress = nil
+                    self.deepTraceLogURL = DeepBackupEngine.shared.traceLogURL
                     self.backupSuccessMessage = "Deep backup of \(appName) completed \u{2014} \(entry.fileCount ?? 0) files."
                     self.showBackupToast = true
                 }
@@ -155,6 +158,7 @@ class DashboardViewModel: ObservableObject {
                     self.isBackingUp = false
                     self.backingUpBundleID = nil
                     self.deepProgress = nil
+                    self.deepTraceLogURL = DeepBackupEngine.shared.traceLogURL
                     self.backupError = error.localizedDescription
                     self.showBackupToast = true
                 }
