@@ -501,47 +501,81 @@ async fn try_deep_backup(work_dir: &str, tracer: &Tracer) -> Result<serde_json::
     }))
 }
 
+/// One proactive-keepalive step over the heartbeat stream, run concurrently
+/// with the backup. Replies to a Marco if one arrives within a short window,
+/// otherwise emits an unsolicited Polo so the shared tunnel transport keeps
+/// seeing traffic during the device's quiet snapshot-prep / passcode phase.
+/// Returns so the caller's `select!` loop re-polls the backup; once the
+/// heartbeat stream is dead it parks forever, leaving the task to the backup.
+async fn keepalive_tick(hb: &mut HeartbeatClient, tracer: &Tracer) {
+    match hb.get_marco(2).await {
+        Ok(interval) => {
+            let r = hb.send_polo().await;
+            tracer.log(&format!(
+                "heartbeat: marco/polo (device interval={interval}) = {}",
+                ok_err(&r)
+            ));
+            if r.is_err() {
+                std::future::pending::<()>().await;
+            }
+        }
+        // No Marco yet — keep the tunnel warm with an unsolicited Polo.
+        Err(IdeviceError::Heartbeat(HeartbeatError::Timeout)) => match hb.send_polo().await {
+            Ok(()) => tracer.log("heartbeat: keepalive polo"),
+            Err(e) => {
+                tracer.log(&format!("heartbeat: keepalive polo failed: {}", describe_err(&e)));
+                std::future::pending::<()>().await;
+            }
+        },
+        Err(e) => {
+            tracer.log(&format!("heartbeat: get_marco error: {}", describe_err(&e)));
+            std::future::pending::<()>().await;
+        }
+    }
+}
+
 async fn run_device_backup(root: &Path, udid: &str, tracer: &Tracer) -> Result<(), BackupFailure> {
     let mut client = connect_to_rsd_services::<MobileBackup2Client>()
         .await
         .map_err(|e| classify("mobilebackup2 connect", &e))?;
+    tracer.log("mobilebackup2: connected");
 
     // We can only read an unencrypted backup. If the device (or an MDM profile)
     // forces encryption, bail with a clear message rather than producing an
     // unreadable archive.
-    if let Ok(true) = client.check_backup_encryption().await {
-        return Err(BackupFailure::Encrypted(
-            "This device is set to encrypt its backups, so Unboxer cannot read \
-             the app data. Turn off \u{201c}Encrypt local backup\u{201d} for this \
-             device (or remove the managing profile) and try again."
-                .to_string(),
-        ));
+    match client.check_backup_encryption().await {
+        Ok(true) => {
+            tracer.log("encryption: ON (aborting)");
+            return Err(BackupFailure::Encrypted(
+                "This device is set to encrypt its backups, so Unboxer cannot read \
+                 the app data. Turn off \u{201c}Encrypt local backup\u{201d} for this \
+                 device (or remove the managing profile) and try again."
+                    .to_string(),
+            ));
+        }
+        Ok(false) => tracer.log("encryption: off"),
+        Err(e) => tracer.log(&format!("encryption check failed (continuing): {}", describe_err(&e))),
     }
 
-    // Keepalive: a backup goes silent for long stretches (passcode entry,
-    // on-device snapshot preparation) and the loopback VPN/proxy can drop the
-    // idle tunnel underneath us. Answering the device's Marco pings on a
-    // parallel stream keeps real traffic flowing over the same tunnel for the
-    // whole backup. Best effort — the backup proceeds without it.
-    let heartbeat = match connect_to_rsd_services::<HeartbeatClient>().await {
-        Ok(mut hb) => Some(crate::post17::RUNTIME.spawn(async move {
-            let mut wait = 15u64;
-            loop {
-                match hb.get_marco(wait + 10).await {
-                    Ok(interval) => {
-                        wait = interval.max(5);
-                        if hb.send_polo().await.is_err() {
-                            break;
-                        }
-                    }
-                    // A quiet stretch is fine; keep listening.
-                    Err(IdeviceError::Heartbeat(HeartbeatError::Timeout)) => continue,
-                    Err(_) => break,
-                }
-            }
-        })),
+    // Keepalive — the crucial bit. After we send the backup request the device
+    // goes quiet for several seconds (preparing the snapshot, waiting for the
+    // passcode) and sends NOTHING back. During that window no bytes cross the
+    // loopback tunnel, and the tunnel transport is torn down underneath us — the
+    // userspace TCP adapter then reports "channel closed" on every stream. The
+    // stock Marco/Polo heartbeat is *passive* (it only replies to the device's
+    // Marco, which is ~10-15 s away), so it stays silent through exactly that
+    // window and cannot save us. We therefore drive PROACTIVE traffic: reply to
+    // any Marco, but otherwise emit a Polo every couple of seconds so the shared
+    // tunnel transport stays warm from the very first moment. It runs
+    // concurrently with the backup on this task (no second tunnel needed).
+    // Best effort — if the heartbeat stream cannot be opened the backup proceeds.
+    let mut heartbeat = match connect_to_rsd_services::<HeartbeatClient>().await {
+        Ok(hb) => {
+            tracer.log("heartbeat: connected (proactive keepalive active)");
+            Some(hb)
+        }
         Err(e) => {
-            log::warn!("heartbeat unavailable ({e}); deep backup may drop on an idle tunnel");
+            tracer.log(&format!("heartbeat: connect failed (no keepalive): {}", describe_err(&e)));
             None
         }
     };
@@ -552,12 +586,27 @@ async fn run_device_backup(root: &Path, udid: &str, tracer: &Tracer) -> Result<(
         },
         tracer,
     };
-    let result = client
-        .backup_from_path(root, Some(udid), None, &delegate)
-        .await;
 
-    if let Some(hb) = heartbeat {
-        hb.abort();
+    let backup_fut = client.backup_from_path(root, Some(udid), None, &delegate);
+    let result = match heartbeat.as_mut() {
+        Some(hb) => {
+            tokio::pin!(backup_fut);
+            loop {
+                tokio::select! {
+                    // Always poll the backup first; keepalive only fills idle time.
+                    biased;
+                    r = &mut backup_fut => break r,
+                    _ = keepalive_tick(hb, tracer) => {}
+                }
+            }
+        }
+        None => backup_fut.await,
+    };
+
+    if let Err(ref e) = result {
+        tracer.log(&format!("backup_from_path error: {}", describe_err(e)));
+    } else {
+        tracer.log("backup_from_path returned ok");
     }
     let status = result.map_err(|e| classify("device backup", &e))?;
 
