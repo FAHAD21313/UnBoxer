@@ -24,10 +24,11 @@ use std::path::Path;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
+use idevice::heartbeat::HeartbeatClient;
 use idevice::mobilebackup2::{
     BackupDelegate, DirEntryInfo, FsBackupDelegate, MobileBackup2Client,
 };
-use idevice::IdeviceError;
+use idevice::{HeartbeatError, IdeviceError};
 use serde_json::json;
 
 use crate::idevice_support::device::fetch_udid_rppairing;
@@ -175,6 +176,39 @@ pub async fn deep_backup_rppairing(work_dir: &str) -> String {
     }
 }
 
+/// `IdeviceError::Socket`'s Display hides the inner io::Error ("device socket
+/// io failed"), which is useless for diagnosing tunnel drops — surface it.
+fn describe_err(e: &IdeviceError) -> String {
+    match e {
+        IdeviceError::Socket(io) => format!("socket I/O failed: {io} [{:?}]", io.kind()),
+        _ => e.to_string(),
+    }
+}
+
+enum BackupFailure {
+    /// Device enforces encrypted backups — user-facing message, never retried.
+    Encrypted(String),
+    /// Tunnel/socket-level failure — worth one retry over a fresh tunnel.
+    Transport(String),
+    Other(String),
+}
+
+impl BackupFailure {
+    fn into_message(self) -> String {
+        match self {
+            Self::Encrypted(m) | Self::Transport(m) | Self::Other(m) => m,
+        }
+    }
+}
+
+fn classify(stage: &str, e: &IdeviceError) -> BackupFailure {
+    let desc = format!("{stage}: {}", describe_err(e));
+    match e {
+        IdeviceError::Socket(_) => BackupFailure::Transport(desc),
+        _ => BackupFailure::Other(desc),
+    }
+}
+
 async fn try_deep_backup(work_dir: &str) -> Result<String, String> {
     reset_progress();
 
@@ -182,34 +216,25 @@ async fn try_deep_backup(work_dir: &str) -> Result<String, String> {
     // the source so the Swift side knows where to find Manifest.db.
     let udid = fetch_udid_rppairing()
         .await
-        .map_err(|e| format!("fetch udid: {e}"))?;
-
-    let mut client = connect_to_rsd_services::<MobileBackup2Client>()
-        .await
-        .map_err(|e| format!("mobilebackup2 connect: {e}"))?;
-
-    // We can only read an unencrypted backup. If the device (or an MDM profile)
-    // forces encryption, bail with a clear message rather than producing an
-    // unreadable archive.
-    if let Ok(true) = client.check_backup_encryption().await {
-        return Err(
-            "This device is set to encrypt its backups, so Unboxer cannot read \
-             the app data. Turn off \u{201c}Encrypt local backup\u{201d} for this \
-             device (or remove the managing profile) and try again."
-                .to_string(),
-        );
-    }
+        .map_err(|e| format!("fetch udid: {}", describe_err(&e)))?;
 
     let root = Path::new(work_dir);
     std::fs::create_dir_all(root).map_err(|e| format!("create work dir: {e}"))?;
 
-    let delegate = ProgressDelegate {
-        inner: FsBackupDelegate,
-    };
-    client
-        .backup_from_path(root, Some(udid.as_str()), None, &delegate)
-        .await
-        .map_err(|e| format!("device backup: {e}"))?;
+    // A transport drop (loopback VPN hiccup, tunnel reset) gets one retry; the
+    // dead cached tunnel fails its liveness probe and is rebuilt automatically.
+    if let Err(failure) = run_device_backup(root, &udid).await {
+        match failure {
+            BackupFailure::Transport(desc) => {
+                log::warn!("deep backup transport failure ({desc}); retrying over a fresh tunnel");
+                reset_progress();
+                run_device_backup(root, &udid)
+                    .await
+                    .map_err(|e| format!("device backup (after retry): {}", e.into_message()))?;
+            }
+            other => return Err(format!("device backup: {}", other.into_message())),
+        }
+    }
 
     Ok(json!({
         "status": "success",
@@ -217,4 +242,81 @@ async fn try_deep_backup(work_dir: &str) -> Result<String, String> {
         "source": udid,
     })
     .to_string())
+}
+
+async fn run_device_backup(root: &Path, udid: &str) -> Result<(), BackupFailure> {
+    let mut client = connect_to_rsd_services::<MobileBackup2Client>()
+        .await
+        .map_err(|e| classify("mobilebackup2 connect", &e))?;
+
+    // We can only read an unencrypted backup. If the device (or an MDM profile)
+    // forces encryption, bail with a clear message rather than producing an
+    // unreadable archive.
+    if let Ok(true) = client.check_backup_encryption().await {
+        return Err(BackupFailure::Encrypted(
+            "This device is set to encrypt its backups, so Unboxer cannot read \
+             the app data. Turn off \u{201c}Encrypt local backup\u{201d} for this \
+             device (or remove the managing profile) and try again."
+                .to_string(),
+        ));
+    }
+
+    // Keepalive: a backup goes silent for long stretches (passcode entry,
+    // on-device snapshot preparation) and the loopback VPN/proxy can drop the
+    // idle tunnel underneath us. Answering the device's Marco pings on a
+    // parallel stream keeps real traffic flowing over the same tunnel for the
+    // whole backup. Best effort — the backup proceeds without it.
+    let heartbeat = match connect_to_rsd_services::<HeartbeatClient>().await {
+        Ok(mut hb) => Some(crate::post17::RUNTIME.spawn(async move {
+            let mut wait = 15u64;
+            loop {
+                match hb.get_marco(wait + 10).await {
+                    Ok(interval) => {
+                        wait = interval.max(5);
+                        if hb.send_polo().await.is_err() {
+                            break;
+                        }
+                    }
+                    // A quiet stretch is fine; keep listening.
+                    Err(IdeviceError::Heartbeat(HeartbeatError::Timeout)) => continue,
+                    Err(_) => break,
+                }
+            }
+        })),
+        Err(e) => {
+            log::warn!("heartbeat unavailable ({e}); deep backup may drop on an idle tunnel");
+            None
+        }
+    };
+
+    let delegate = ProgressDelegate {
+        inner: FsBackupDelegate,
+    };
+    let result = client
+        .backup_from_path(root, Some(udid), None, &delegate)
+        .await;
+
+    if let Some(hb) = heartbeat {
+        hb.abort();
+    }
+    let status = result.map_err(|e| classify("device backup", &e))?;
+
+    // The DL loop returns the device's final status dictionary as Ok even when
+    // it carries a failure (cancelled, out of space, ...) — check it ourselves.
+    if let Some(dict) = status {
+        let code = dict
+            .get("ErrorCode")
+            .and_then(|v| v.as_signed_integer())
+            .unwrap_or(0);
+        if code != 0 {
+            let desc = dict
+                .get("ErrorDescription")
+                .and_then(|v| v.as_string())
+                .unwrap_or("no description");
+            return Err(BackupFailure::Other(format!(
+                "the device reported backup error {code}: {desc}"
+            )));
+        }
+    }
+    Ok(())
 }
