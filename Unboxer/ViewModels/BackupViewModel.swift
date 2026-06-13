@@ -15,6 +15,11 @@ class BackupViewModel: ObservableObject {
 
     private let fm = FileManager.default
 
+    /// The directory the file browser is rooted at (the backup's `extracted/`
+    /// folder). Navigation is clamped to this subtree so Back can never walk
+    /// above it into the app sandbox or iOS system paths.
+    private var browseRoot: URL?
+
     var backupsDirectoryURL: URL {
         let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first!
         let dir = docs.appendingPathComponent("Backups", isDirectory: true)
@@ -45,6 +50,7 @@ class BackupViewModel: ObservableObject {
             do {
                 let dir = try BackupEngine.shared.ensureExtracted(for: entry)
                 await MainActor.run {
+                    browseRoot = dir
                     currentDirectory = dir
                     loadContents(dir)
                     isExtracting = false
@@ -66,11 +72,11 @@ class BackupViewModel: ObservableObject {
 
         Task {
             do {
-                _ = try await BackupEngine.shared.backupApp(bundleID: bundleID, appName: appName, version: version)
+                let entry = try await BackupEngine.shared.backupApp(bundleID: bundleID, appName: appName, version: version)
                 await MainActor.run {
                     loadBackups()
                     isBackingUp = false
-                    backupSuccess = "Backup of \(appName) completed successfully."
+                    backupSuccess = entry.successMessage(appName: appName)
                 }
             } catch {
                 await MainActor.run {
@@ -84,28 +90,60 @@ class BackupViewModel: ObservableObject {
     func clearExtraction() {
         selectedBackup = nil
         currentDirectory = nil
+        browseRoot = nil
         directoryContents = []
         extractError = nil
         isExtracting = false
     }
 
     func enterDirectory(_ url: URL) {
+        // Only descend into directories that stay within the browse root.
+        guard let root = browseRoot, isInside(url, root: root) else { return }
         currentDirectory = url
         loadContents(url)
     }
 
+    /// True when the browser is at its root, so the Back button should leave
+    /// the browser entirely instead of navigating to a parent directory.
+    var isAtBrowseRoot: Bool {
+        guard let current = currentDirectory, let root = browseRoot else { return true }
+        return canonicalPath(current) == canonicalPath(root)
+    }
+
     func goBack() {
-        guard let current = currentDirectory else { return }
-        let parent = current.deletingLastPathComponent()
-        let expectedExtracted = backupsDirectoryURL
-            .appendingPathComponent(selectedBackup?.relativePath ?? "")
-            .appendingPathComponent("extracted")
-        if parent == expectedExtracted || parent == backupsDirectoryURL {
+        guard let current = currentDirectory, let root = browseRoot else {
             clearExtraction()
-        } else {
+            return
+        }
+
+        // At the root (or, defensively, anywhere outside it) → return to the list.
+        if canonicalPath(current) == canonicalPath(root) || !isInside(current, root: root) {
+            clearExtraction()
+            return
+        }
+
+        let parent = current.deletingLastPathComponent()
+        // Never navigate above the root; clamp to it instead.
+        if isInside(parent, root: root) {
             currentDirectory = parent
             loadContents(parent)
+        } else {
+            currentDirectory = root
+            loadContents(root)
         }
+    }
+
+    /// Canonical filesystem path: resolves symlinks (e.g. iOS `/private`) and
+    /// standardizes the URL so boundary comparisons are reliable.
+    private func canonicalPath(_ url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// True if `url` is the root itself or nested anywhere beneath it.
+    private func isInside(_ url: URL, root: URL) -> Bool {
+        let target = canonicalPath(url)
+        let base = canonicalPath(root)
+        return target == base || target.hasPrefix(base + "/")
     }
 
     func loadContents(_ url: URL) {

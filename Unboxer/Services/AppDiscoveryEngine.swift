@@ -15,9 +15,9 @@ public class AppDiscoveryEngine {
 
     private init() {}
 
-    public func fetchAllApps(udid: String) throws -> [AppInfo] {
+    public func fetchAllApps() throws -> [AppInfo] {
         guard let jsonString = RustIdevice.fetchAllApps() else {
-            throw NSError(domain: "AppDiscoveryEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Rust Core returned nil for app discovery. Ensure device is connected over Wi-Fi."])
+            throw NSError(domain: "AppDiscoveryEngine", code: -1, userInfo: [NSLocalizedDescriptionKey: "Could not reach the device for app discovery. Ensure the loopback proxy/VPN is running and the device is connected."])
         }
 
         guard let jsonData = jsonString.data(using: .utf8) else {
@@ -28,10 +28,7 @@ public class AppDiscoveryEngine {
             throw NSError(domain: "AppDiscoveryEngine", code: -3, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON format from Rust Core."])
         }
 
-        if array.isEmpty {
-            throw NSError(domain: "AppDiscoveryEngine", code: -4, userInfo: [NSLocalizedDescriptionKey: "instproxy returned empty list. No user apps found on device."])
-        }
-
+        // An empty list is a valid result (a device with no user apps), not an error.
         let apps: [AppInfo] = array.compactMap { dict in
             guard let bundleID = dict["CFBundleIdentifier"] as? String else {
                 return nil

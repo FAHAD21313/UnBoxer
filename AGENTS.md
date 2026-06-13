@@ -18,10 +18,13 @@ No code signing (`CODE_SIGNING_ALLOWED=NO`, empty identity/team).
 - Prerequisites for Rust build: `rustup target add aarch64-apple-ios`
 
 ## Entrypoint & architecture
-- `UnBoxerApp.swift` → `ContentView` (2 tabs: Dashboard, Settings)
+- `UnBoxerApp.swift` → `ContentView` (3 tabs: Dashboard, Backups, Settings)
 - `PairingManager` (`@StateObject` env object) — manages `pairing_file.plist` import/parse/delete
 - `DashboardViewModel` orchestrates: `LockdownEngine.executeNativeEngine()` → `AppDiscoveryEngine.fetchAllApps(udid:)`
-- Both engines call Rust via `RustIdevice` static methods
+- `BackupEngine` backs up app containers via house_arrest (`vend_container`, falls back to `vend_documents`) into `Documents/Backups/`
+- All engines call Rust via `RustIdevice` static methods
+
+See `CLAUDE.md` for the full architecture reference — keep both files in sync.
 
 ## Build commands
 ```bash

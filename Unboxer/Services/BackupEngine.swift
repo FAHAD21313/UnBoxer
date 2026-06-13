@@ -14,7 +14,8 @@ class BackupEngine {
         return dir
     }
 
-    func backupApp(bundleID: String, appName: String, version: String) async throws -> String {
+    @discardableResult
+    func backupApp(bundleID: String, appName: String, version: String) async throws -> BackupEntry {
         let timestamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let relPath = "\(bundleID)_\(timestamp)"
@@ -37,6 +38,8 @@ class BackupEngine {
         let totalSize = (try? fm.attributesOfItem(atPath: zipPath)[.size] as? Int64) ?? 0
         let isDocs = (dict["backup_type"] as? String) == "documents"
 
+        // New stats are absent for documents-only backups and for any build
+        // running the previous Rust framework, so read them defensively.
         let entry = BackupEntry(
             appName: appName,
             bundleID: bundleID,
@@ -44,12 +47,18 @@ class BackupEngine {
             date: Date(),
             totalSize: totalSize,
             relativePath: relPath,
-            isDocumentsOnly: isDocs
+            isDocumentsOnly: isDocs,
+            fileCount: dict["file_count"] as? Int,
+            dirCount: dict["dir_count"] as? Int,
+            symlinkCount: dict["symlink_count"] as? Int,
+            skippedCount: dict["skipped_count"] as? Int,
+            isPartial: dict["partial"] as? Bool,
+            isIncomplete: dict["incomplete"] as? Bool
         )
         let metaData = try JSONEncoder().encode(entry)
         try metaData.write(to: backupDir.appendingPathComponent("metadata.json"))
 
-        return zipPath
+        return entry
     }
 
     func ensureExtracted(for entry: BackupEntry) throws -> URL {

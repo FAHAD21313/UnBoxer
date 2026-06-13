@@ -146,7 +146,7 @@ targets:
       CODE_SIGN_IDENTITY: ""
       ENABLE_USER_SCRIPT_SANDBOXING: NO
       DEVELOPMENT_TEAM: ""
-      OTHER_LDFLAGS: ["-ObjC"]
+      OTHER_LDFLAGS: ["-ObjC", "-lsqlite3"]
     dependencies:
       - target: libimobiledevice
       - target: libimobiledevice-glue

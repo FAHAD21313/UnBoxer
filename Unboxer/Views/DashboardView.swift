@@ -95,11 +95,9 @@ struct DashboardView: View {
                         
                     Divider().background(Color.white.opacity(0.1)).padding(.vertical, 8)
                     
-                    // Native C Minimuxer Test Section
+                    // Native Engine Test Section
                     Button(action: {
-                        if let hostID = pairingManager.hostID {
-                            viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path, udid: hostID)
-                        }
+                        viewModel.establishLockdownConnection(pairingFile: pairingManager.fileURL.path)
                     }) {
                         HStack(spacing: 10) {
                             if viewModel.isTesting {
@@ -113,10 +111,10 @@ struct DashboardView: View {
                         .foregroundColor(.white)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 20)
-                        .background(pairingManager.hostID == nil ? Color.gray : Color.blue)
+                        .background(viewModel.isTesting ? Color.gray : Color.blue)
                         .clipShape(Capsule())
                     }
-                    .disabled(viewModel.isTesting || pairingManager.hostID == nil)
+                    .disabled(viewModel.isTesting)
                     
                     // Log Terminal
                     if !viewModel.logs.isEmpty {
@@ -179,7 +177,56 @@ struct DashboardView: View {
                             Text("Installed Apps (\(viewModel.apps.count))")
                                 .font(.system(size: 18, weight: .bold))
                                 .padding(.top, 10)
-                            
+
+                            // Deep backup progress card (percent + ETA)
+                            if let deep = viewModel.deepProgress {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "externaldrive.badge.timemachine")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(.purple)
+                                        Text("Deep Backup \u{2014} \(deep.appName)")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text(deep.percentText)
+                                            .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                            .foregroundColor(.purple)
+                                    }
+                                    ProgressView(value: deep.fraction ?? 0)
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .purple))
+                                        .animation(.easeInOut(duration: 0.4), value: deep.fraction)
+                                    Text(deep.detailText)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .padding(12)
+                                .background(Color.purple.opacity(0.08))
+                                .cornerRadius(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.purple.opacity(0.25), lineWidth: 1))
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+
+                            // Diagnostic trace of the last deep backup (phase 1
+                            // of the space-saving redesign) — share it so the
+                            // device's operation sequence can be analyzed.
+                            if let traceURL = viewModel.deepTraceLogURL, viewModel.deepProgress == nil {
+                                ShareLink(item: traceURL) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Share Deep Backup Trace Log")
+                                            .font(.system(size: 12, weight: .medium))
+                                    }
+                                    .foregroundColor(.purple)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(Color.purple.opacity(0.1))
+                                    .clipShape(Capsule())
+                                }
+                            }
+
                             ScrollView {
                                 LazyVStack(spacing: 12) {
                                     ForEach(viewModel.apps) { app in
@@ -241,6 +288,26 @@ struct DashboardView: View {
                                         .background(Color.black.opacity(0.2))
                                         .cornerRadius(16)
                                         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.05), lineWidth: 1))
+                                        .contextMenu {
+                                            Button {
+                                                viewModel.performBackup(
+                                                    bundleID: app.bundleID,
+                                                    appName: app.name,
+                                                    version: app.version
+                                                )
+                                            } label: {
+                                                Label("Quick Backup (container/documents)", systemImage: "archivebox")
+                                            }
+                                            Button {
+                                                viewModel.performDeepBackup(
+                                                    bundleID: app.bundleID,
+                                                    appName: app.name,
+                                                    version: app.version
+                                                )
+                                            } label: {
+                                                Label("Deep Backup (App Store apps \u{2014} slow)", systemImage: "externaldrive.badge.timemachine")
+                                            }
+                                        }
                                     }
                                 }
                                 .padding(.vertical, 8)
@@ -258,6 +325,7 @@ struct DashboardView: View {
                 .padding(.horizontal)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.showAppList)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.isLogsFolded)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.deepProgress == nil)
             }
             
             Spacer()
@@ -284,6 +352,9 @@ struct DashboardView: View {
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.75), value: backupToast?.id)
             }
+        }
+        .onAppear {
+            viewModel.deepTraceLogURL = DeepBackupEngine.shared.traceLogURL
         }
         .onChange(of: viewModel.showBackupToast) { show in
             if show {
